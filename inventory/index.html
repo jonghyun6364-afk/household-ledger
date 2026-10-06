@@ -68,7 +68,7 @@
 
     <section class="stats" aria-label="재고 요약">
       <div class="stat"><span class="k">품목 수</span><span class="v" id="sItems">–</span></div>
-      <div class="stat warn"><span class="k">부족 (최소 수량 이하)</span><span class="v" id="sLow">–</span></div>
+      <div class="stat warn"><span class="k">부족</span><span class="v" id="sLow">–</span></div>
       <div class="stat bad"><span class="k">재고 없음</span><span class="v" id="sOut">–</span></div>
       <div class="stat"><span class="k">오늘 입출고</span><span class="v" id="sToday">–</span></div>
     </section>
@@ -81,22 +81,27 @@
 
     <section id="viewItems" class="view">
       <div class="toolbar">
-        <input class="search" type="search" id="q" placeholder="품목명, 위치, 메모 검색" />
-        <select id="fCat" aria-label="분류"><option value="">전체 분류</option></select>
-        <label class="chk"><input type="checkbox" id="fLow" /> 부족만</label>
-        <button class="btn" id="btnCats">분류 관리</button>
-        <button class="btn" id="btnCsv">CSV 내보내기</button>
-        <button class="btn" id="btnImport" hidden>일괄 등록</button>
-        <button class="btn primary" id="btnAdd">+ 품목 추가</button>
+        <input class="search" type="search" id="q" placeholder="품목명, 분류, 메모 검색" />
+        <div class="tb-btns">
+          <button class="btn" id="btnCats">분류 관리</button>
+          <button class="btn" id="btnCsv">CSV 내보내기</button>
+          <button class="btn" id="btnImport" hidden>일괄 등록</button>
+          <button class="btn primary" id="btnAdd">+ 품목 추가</button>
+        </div>
       </div>
+      <div class="chips" id="catChips" role="group" aria-label="분류 필터"></div>
       <div class="panel">
-        <div class="tbl-wrap" id="tblWrap">
-          <table>
-            <thead><tr>
-              <th>품목</th><th>분류</th><th>위치</th><th class="r">현재 수량</th><th class="r">최소</th><th>상태</th><th>최근 변경</th><th class="r">입출고</th>
-            </tr></thead>
-            <tbody id="rows"></tbody>
-          </table>
+        <div id="listWrap">
+          <div class="tbl-wrap">
+            <table>
+              <thead><tr>
+                <th>품목</th><th>분류</th><th class="r">현재 수량</th><th>최근 변경</th><th class="r">입출고</th>
+              </tr></thead>
+              <tbody id="rows"></tbody>
+            </table>
+          </div>
+          <p class="mhint">이름을 누르면 입출고, 분류를 누르면 수정</p>
+          <ul class="mlist" id="mrows"></ul>
         </div>
         <div class="empty" id="empty" hidden></div>
       </div>

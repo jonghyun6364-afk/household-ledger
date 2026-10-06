@@ -73,56 +73,72 @@ function renderStats() {
   $("sToday").textContent = fmtN(logs.filter((l) => (l.type === "in" || l.type === "out") && new Date(l.at).toDateString() === today).length);
 }
 
+// 분류 필터: 칩으로 고르고, 부족만 보기도 칩 하나로 둡니다
+let catFilter = "", lowOnly = false;
 function renderCats() {
   const cats = [...new Set(items.map((i) => (i.category || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ko"));
-  const sel = $("fCat"), cur = sel.value;
-  sel.replaceChildren(el("option", { value: "" }, "전체 분류"), ...cats.map((c) => el("option", { value: c }, c)));
-  sel.value = cats.includes(cur) ? cur : "";
+  if (catFilter && !cats.includes(catFilter)) catFilter = "";
+  const chip = (label, active, onclick, extra = "") =>
+    el("button", { type: "button", class: "chip" + extra, "aria-pressed": String(active), onclick }, label);
+  $("catChips").replaceChildren(
+    chip("전체", !catFilter, () => { catFilter = ""; renderCats(); renderItems(); }),
+    ...cats.map((c) => chip(c, catFilter === c, () => { catFilter = c; renderCats(); renderItems(); })),
+    chip("부족·없음만", lowOnly, () => { lowOnly = !lowOnly; renderCats(); renderItems(); }, " warn"),
+  );
   $("catList").replaceChildren(...cats.map((c) => el("option", { value: c })));
 }
 
+const byName = (a, b) => (a.name || "").localeCompare(b.name || "", "ko", { numeric: true });
 function renderItems() {
   renderStats();
   const q = $("q").value.trim().toLowerCase();
-  const cat = $("fCat").value, lowOnly = $("fLow").checked;
   const order = { out: 0, low: 1, ok: 2 };
   const list = items
-    .filter((i) => !cat || (i.category || "") === cat)
+    .filter((i) => !catFilter || (i.category || "") === catFilter)
     .filter((i) => !lowOnly || status(i) !== "ok")
     .filter((i) => !q || [i.name, i.category, i.location, i.note].some((s) => (s || "").toLowerCase().includes(q)))
-    .sort((a, b) => order[status(a)] - order[status(b)] || (a.name || "").localeCompare(b.name || "", "ko"));
+    .sort((a, b) => order[status(a)] - order[status(b)] || byName(a, b));
 
-  $("rows").replaceChildren(...list.map((it) => {
-    const st = status(it);
-    return el("tr", {},
-      el("td", {}, el("div", { class: "iname" }, it.name || "(이름 없음)", it.note ? el("small", {}, it.note) : null)),
-      el("td", {}, el("button", { class: "catbtn", title: "분류 바꾸기", onclick: () => openItem(it.id, "iCat") }, it.category || "분류 없음")),
-      el("td", {}, it.location ? el("span", { class: "loc" }, it.location) : el("span", { class: "meta" }, "—")),
-      el("td", { class: "r" }, el("span", { class: "qty" }, fmtN(it.qty), el("small", {}, it.unit || ""))),
-      el("td", { class: "r num meta" }, it.minQty ? fmtN(it.minQty) : "—"),
-      el("td", {}, el("span", { class: "pill " + st }, STATUS_LABEL[st])),
-      el("td", { class: "meta" }, it.updatedAt ? `${it.updatedByName || it.updatedBy} · ${fmtWhen(it.updatedAt)}` : ""),
-      el("td", {}, el("div", { class: "acts" },
-        el("button", { class: "step out", title: "1개 출고", "aria-label": `${it.name} 1개 출고`, disabled: (Number(it.qty) || 0) <= 0, onclick: () => quick(it.id, -1) }, "−"),
-        el("button", { class: "step in", title: "1개 입고", "aria-label": `${it.name} 1개 입고`, onclick: () => quick(it.id, 1) }, "+"),
-        el("button", { class: "link", onclick: () => openMove(it.id) }, "입출고"),
-        el("button", { class: "link", onclick: () => openItem(it.id) }, "수정"),
-      )),
-    );
-  }));
+  const qtyEl = (it) => el("span", { class: "qty " + status(it) }, fmtN(it.qty), el("small", {}, it.unit || ""));
+  const minus = (it) => el("button", { class: "step out", title: "1개 출고", "aria-label": `${it.name} 1개 출고`, disabled: (Number(it.qty) || 0) <= 0, onclick: () => quick(it.id, -1) }, "−");
+  const plus = (it) => el("button", { class: "step in", title: "1개 입고", "aria-label": `${it.name} 1개 입고`, onclick: () => quick(it.id, 1) }, "+");
+  const who = (it) => it.updatedAt ? `${it.updatedByName || it.updatedBy} · ${fmtWhen(it.updatedAt)}` : "";
+
+  // 넓은 화면: 표
+  $("rows").replaceChildren(...list.map((it) => el("tr", {},
+    el("td", {}, el("div", { class: "iname" }, it.name || "(이름 없음)", it.note ? el("small", {}, it.note) : null)),
+    el("td", {}, el("button", { class: "catbtn", title: "분류 바꾸기", onclick: () => openItem(it.id, "iCat") }, it.category || "분류 없음")),
+    el("td", { class: "r" }, qtyEl(it)),
+    el("td", { class: "meta" }, who(it)),
+    el("td", {}, el("div", { class: "acts" },
+      minus(it), plus(it),
+      el("button", { class: "link", onclick: () => openMove(it.id) }, "입출고"),
+      el("button", { class: "link", onclick: () => openItem(it.id) }, "수정"),
+    )),
+  )));
+
+  // 휴대폰: 한 줄 카드 — 이름을 누르면 입출고, 분류를 누르면 수정
+  $("mrows").replaceChildren(...list.map((it) => el("li", { class: "mrow " + status(it) },
+    el("div", { class: "minfo" },
+      el("button", { class: "mname", onclick: () => openMove(it.id) }, it.name || "(이름 없음)"),
+      el("div", { class: "mmeta" },
+        el("button", { class: "catbtn", title: "품목 수정", onclick: () => openItem(it.id, "iCat") }, it.category || "분류 없음"),
+        who(it) ? el("span", {}, who(it)) : null)),
+    el("div", { class: "mstep" }, minus(it), qtyEl(it), plus(it)),
+  )));
 
   const empty = $("empty");
   if (!items.length) {
     empty.replaceChildren(
       el("strong", {}, "첫 품목을 등록해 보세요"),
-      el("span", {}, "품목명, 보관 위치, 최소 수량을 정해 두면 부족한 품목이 위로 올라옵니다. 등록된 팀원 모두가 같은 목록을 실시간으로 봅니다."),
+      el("span", {}, "분류와 최소 수량을 정해 두면 부족한 품목이 위로 올라옵니다. 등록된 팀원 모두가 같은 목록을 실시간으로 봅니다."),
       el("button", { class: "btn primary", onclick: () => openItem(null) }, "+ 품목 추가"),
     );
   } else if (!list.length) {
     empty.replaceChildren(el("strong", {}, "조건에 맞는 품목이 없습니다"), el("span", {}, "검색어나 분류 필터를 바꿔 보세요."));
   }
   empty.hidden = list.length > 0;
-  $("tblWrap").hidden = !list.length;
+  $("listWrap").hidden = !list.length;
 }
 
 const TYPE_LABEL = { in: "입고", out: "출고", adjust: "실사 조정", create: "등록", edit: "정보 수정", delete: "삭제" };
@@ -276,7 +292,7 @@ function openItem(id, focusId) {
   const it = id ? items.find((i) => i.id === id) : null;
   $("dItemTitle").textContent = it ? "품목 정보 수정" : "품목 추가";
   $("iName").value = it?.name || "";
-  $("iCat").value = it?.category || ($("fCat").value || "");
+  $("iCat").value = it?.category || catFilter;
   $("iLoc").value = it?.location || "";
   $("iUnit").value = it?.unit || "";
   $("iMin").value = it ? (it.minQty || 0) : 0;
@@ -398,7 +414,7 @@ async function renameCategory(from, to) {
     $("cErr").textContent = `${done}개 바꾼 뒤 멈췄습니다. ${errMsg(e)}`;
   } finally {
     busy = false;
-    if ($("fCat").value === from) $("fCat").value = "";
+    if (catFilter === from) catFilter = to;
     setTimeout(renderCatRows, 300);
   }
 }
@@ -483,7 +499,7 @@ $("fMember").addEventListener("submit", async (ev) => {
 });
 
 // ---------- toolbar / tabs ----------
-["q", "fCat", "fLow"].forEach((id) => $(id).addEventListener("input", renderItems));
+$("q").addEventListener("input", renderItems);
 $("btnAdd").addEventListener("click", () => openItem(null));
 function showTab(which) {
   document.querySelectorAll(".tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === which)));
