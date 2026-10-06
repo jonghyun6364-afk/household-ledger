@@ -1,6 +1,6 @@
 {
-  "name": "함께 쓰는 재고장",
-  "short_name": "재고장",
+  "name": "이고진 대구센터 부속관리",
+  "short_name": "부속관리",
   "description": "팀원들이 구글 계정으로 로그인해 함께 쓰는 재고 관리 앱",
   "start_url": "./index.html",
   "scope": "./",
