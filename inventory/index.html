@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" crossorigin="anonymous" />
-<link rel="stylesheet" href="styles.css" />
+<link rel="stylesheet" href="styles.css?v=5" />
 </head>
 <body>
 <div class="wrap">
@@ -67,14 +67,15 @@
     <div class="banner" id="banner" hidden></div>
 
     <section class="stats" aria-label="재고 요약">
-      <div class="stat"><span class="k">품목 수</span><span class="v" id="sItems">–</span></div>
+      <div class="stat"><span class="k"><span id="sBook">부속</span> 품목 수</span><span class="v" id="sItems">–</span></div>
       <div class="stat warn"><span class="k">부족</span><span class="v" id="sLow">–</span></div>
       <div class="stat bad"><span class="k">재고 없음</span><span class="v" id="sOut">–</span></div>
       <div class="stat"><span class="k">오늘 입출고</span><span class="v" id="sToday">–</span></div>
     </section>
 
     <nav class="tabs" role="tablist">
-      <button role="tab" data-tab="items" aria-selected="true">품목</button>
+      <button role="tab" data-tab="items" data-book="parts" aria-selected="true">부속</button>
+      <button role="tab" data-tab="items" data-book="goods" aria-selected="false">상품</button>
       <button role="tab" data-tab="log" aria-selected="false">입출고 기록</button>
       <button role="tab" data-tab="members" aria-selected="false">팀원</button>
     </nav>
@@ -108,6 +109,7 @@
     </section>
 
     <section id="viewLog" class="view" hidden>
+      <div class="chips" id="logBooks" role="group" aria-label="기록 장부"><button type="button" class="chip" data-book="parts" aria-pressed="true">부속 기록</button><button type="button" class="chip" data-book="goods" aria-pressed="false">상품 기록</button></div>
       <div class="panel">
         <ul class="log" id="log"></ul>
         <div class="empty" id="logEmpty" hidden><strong>아직 기록이 없습니다</strong><span>품목을 추가하거나 입고·출고하면 누가 언제 바꿨는지 여기에 남습니다.</span></div>
@@ -185,7 +187,7 @@
 <!-- 분류 관리 -->
 <dialog id="dCats">
   <form class="dlg" id="fCats">
-    <h2>분류 관리</h2>
+    <h2 id="cTitle">분류 관리</h2>
     <p class="meta">이름을 고치고 '변경'을 누르면 그 분류의 품목이 모두 한 번에 바뀝니다. 이미 있는 분류 이름으로 바꾸면 두 분류가 합쳐집니다. 품목 하나만 바꾸려면 표의 분류 칸을 누르세요.</p>
     <ul class="catlist" id="catRows"></ul>
     <p class="err" id="cErr"></p>
@@ -196,7 +198,7 @@
 <!-- 일괄 등록 -->
 <dialog id="dImport" class="wide">
   <form class="dlg" id="fImport">
-    <h2>일괄 등록</h2>
+    <h2 id="impTitle">일괄 등록</h2>
     <p class="meta">구글 시트나 엑셀에서 칸을 복사해 붙여넣으세요. 한 줄에 품목 하나, 열 순서는<br>
       <b>품목명 · 분류 · 수량</b> · 단위 · 위치 · 최소 수량 (뒤의 세 개는 없어도 됩니다)</p>
     <textarea id="impText" rows="8" placeholder="V6 모터&#9;모터&#9;5&#9;개&#10;V6 인클라인 모터&#9;인클라인 모터&#9;2&#9;개"></textarea>
@@ -210,6 +212,6 @@
 </dialog>
 
 <div class="toast" id="toast" hidden role="status"></div>
-<script type="module" src="app.js"></script>
+<script type="module" src="app.js?v=5"></script>
 </body>
 </html>

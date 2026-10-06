@@ -1,4 +1,4 @@
-const CACHE_NAME = "inventory-cache-v3";
+const CACHE_NAME = "inventory-cache-v4";
 const ASSETS = [
   "./",
   "./index.html",
@@ -36,9 +36,10 @@ function cacheFirst(request) {
   }));
 }
 
-// App files: network first so updates land right away, cache when offline
+// App files: network first so updates land right away, cache when offline.
+// no-cache revalidates with the server so the page never pairs new HTML with a stale script.
 function networkFirst(request) {
-  return fetch(request).then((res) => {
+  return fetch(request, { cache: "no-cache" }).then((res) => {
     if (res && res.ok) {
       const copy = res.clone();
       caches.open(CACHE_NAME).then((c) => c.put(request, copy));

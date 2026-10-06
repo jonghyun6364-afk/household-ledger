@@ -12,6 +12,12 @@ let unsubs = [];
 let editingId = null, moveId = null, moveKind = "in";
 let busy = false;
 
+// 장부: 부속(parts)과 상품(goods)은 품목·분류·기록을 따로 관리합니다. book 이 없는 예전 품목은 부속입니다.
+const BOOKS = { parts: "부속", goods: "상품" };
+let book = "parts", logBook = "parts";
+const bookOf = (x) => (x && x.book) || "parts";
+const curItems = () => items.filter((i) => bookOf(i) === book);
+
 // ---------- helpers ----------
 function el(tag, attrs = {}, ...kids) {
   const n = document.createElement(tag);
@@ -66,17 +72,19 @@ function show(screen) {
 
 // ---------- render ----------
 function renderStats() {
-  $("sItems").textContent = fmtN(items.length);
-  $("sLow").textContent = fmtN(items.filter((i) => status(i) === "low").length);
-  $("sOut").textContent = fmtN(items.filter((i) => status(i) === "out").length);
+  const list = curItems();
+  $("sBook").textContent = BOOKS[book];
+  $("sItems").textContent = fmtN(list.length);
+  $("sLow").textContent = fmtN(list.filter((i) => status(i) === "low").length);
+  $("sOut").textContent = fmtN(list.filter((i) => status(i) === "out").length);
   const today = new Date().toDateString();
-  $("sToday").textContent = fmtN(logs.filter((l) => (l.type === "in" || l.type === "out") && new Date(l.at).toDateString() === today).length);
+  $("sToday").textContent = fmtN(logs.filter((l) => bookOf(l) === book && (l.type === "in" || l.type === "out") && new Date(l.at).toDateString() === today).length);
 }
 
 // 분류 필터: 칩으로 고르고, 부족만 보기도 칩 하나로 둡니다
 let catFilter = "", lowOnly = false;
 function renderCats() {
-  const cats = [...new Set(items.map((i) => (i.category || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ko"));
+  const cats = [...new Set(curItems().map((i) => (i.category || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ko"));
   if (catFilter && !cats.includes(catFilter)) catFilter = "";
   const chip = (label, active, onclick, extra = "") =>
     el("button", { type: "button", class: "chip" + extra, "aria-pressed": String(active), onclick }, label);
@@ -93,7 +101,8 @@ function renderItems() {
   renderStats();
   const q = $("q").value.trim().toLowerCase();
   const order = { out: 0, low: 1, ok: 2 };
-  const list = items
+  const all = curItems();
+  const list = all
     .filter((i) => !catFilter || (i.category || "") === catFilter)
     .filter((i) => !lowOnly || status(i) !== "ok")
     .filter((i) => !q || [i.name, i.category, i.location, i.note].some((s) => (s || "").toLowerCase().includes(q)))
@@ -128,11 +137,11 @@ function renderItems() {
   )));
 
   const empty = $("empty");
-  if (!items.length) {
+  if (!all.length) {
     empty.replaceChildren(
-      el("strong", {}, "첫 품목을 등록해 보세요"),
+      el("strong", {}, `첫 ${BOOKS[book]} 품목을 등록해 보세요`),
       el("span", {}, "분류와 최소 수량을 정해 두면 부족한 품목이 위로 올라옵니다. 등록된 팀원 모두가 같은 목록을 실시간으로 봅니다."),
-      el("button", { class: "btn primary", onclick: () => openItem(null) }, "+ 품목 추가"),
+      el("button", { class: "btn primary", onclick: () => openItem(null) }, `+ ${BOOKS[book]} 추가`),
     );
   } else if (!list.length) {
     empty.replaceChildren(el("strong", {}, "조건에 맞는 품목이 없습니다"), el("span", {}, "검색어나 분류 필터를 바꿔 보세요."));
@@ -143,7 +152,9 @@ function renderItems() {
 
 const TYPE_LABEL = { in: "입고", out: "출고", adjust: "실사 조정", create: "등록", edit: "정보 수정", delete: "삭제" };
 function renderLog() {
-  $("log").replaceChildren(...logs.map((l) => {
+  document.querySelectorAll("#logBooks .chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.book === logBook)));
+  const list = logs.filter((l) => bookOf(l) === logBook);
+  $("log").replaceChildren(...list.map((l) => {
     let delta = "", cls = "neu";
     if (l.type === "in") { delta = "+" + fmtN(l.delta); cls = "in"; }
     else if (l.type === "out") { delta = "−" + fmtN(Math.abs(l.delta)); cls = "out"; }
@@ -159,7 +170,7 @@ function renderLog() {
       el("span", { class: "delta " + cls }, delta),
     );
   }));
-  $("logEmpty").hidden = logs.length > 0;
+  $("logEmpty").hidden = list.length > 0;
   renderStats();
 }
 
@@ -210,7 +221,7 @@ async function changeQty(itemId, kind, amount, note) {
     tx.update(itemRef, { qty: next, updatedBy: me.email, updatedByName: me.name, updatedAt: fs.serverTimestamp(), lastLogId: logRef.id });
     tx.set(logRef, {
       itemId, itemName: d.name, unit: d.unit || "", type: kind, delta: next - cur, qtyAfter: next,
-      note: note || "", by: me.email, byName: me.name, at: fs.serverTimestamp(),
+      note: note || "", by: me.email, byName: me.name, at: fs.serverTimestamp(), book: bookOf(d),
     });
     return { next, name: d.name, unit: d.unit || "" };
   });
@@ -226,17 +237,17 @@ async function quick(itemId, delta) {
   finally { busy = false; }
 }
 
-async function createItem(fields, qty) {
+async function createItem(fields, qty, bk = book) {
   const itemRef = fs.doc(fs.collection(db, "items"));
   const logRef = fs.doc(fs.collection(db, "logs"));
   const b = fs.writeBatch(db);
   b.set(itemRef, {
-    ...fields, qty, createdBy: me.email, createdAt: fs.serverTimestamp(),
+    ...fields, qty, book: bk, createdBy: me.email, createdAt: fs.serverTimestamp(),
     updatedBy: me.email, updatedByName: me.name, updatedAt: fs.serverTimestamp(), lastLogId: logRef.id,
   });
   b.set(logRef, {
     itemId: itemRef.id, itemName: fields.name, unit: fields.unit, type: "create", delta: qty, qtyAfter: qty,
-    note: "", by: me.email, byName: me.name, at: fs.serverTimestamp(),
+    note: "", by: me.email, byName: me.name, at: fs.serverTimestamp(), book: bk,
   });
   await b.commit();
 }
@@ -247,11 +258,11 @@ async function editItem(itemId, fields) {
   await fs.runTransaction(db, async (tx) => {
     const snap = await tx.get(itemRef);
     if (!snap.exists()) throw { code: "gone" };
-    const cur = Number(snap.data().qty) || 0;
+    const cur = Number(snap.data().qty) || 0, bk = bookOf(snap.data());
     tx.update(itemRef, { ...fields, updatedBy: me.email, updatedByName: me.name, updatedAt: fs.serverTimestamp(), lastLogId: logRef.id });
     tx.set(logRef, {
       itemId, itemName: fields.name, unit: fields.unit, type: "edit", delta: 0, qtyAfter: cur,
-      note: "", by: me.email, byName: me.name, at: fs.serverTimestamp(),
+      note: "", by: me.email, byName: me.name, at: fs.serverTimestamp(), book: bk,
     });
   });
 }
@@ -266,7 +277,7 @@ async function deleteItem(itemId) {
     tx.delete(itemRef);
     tx.set(logRef, {
       itemId, itemName: d.name, unit: d.unit || "", type: "delete", delta: 0, qtyAfter: Number(d.qty) || 0,
-      note: "", by: me.email, byName: me.name, at: fs.serverTimestamp(),
+      note: "", by: me.email, byName: me.name, at: fs.serverTimestamp(), book: bookOf(d),
     });
   });
 }
@@ -290,7 +301,7 @@ async function removeMember(email) {
 function openItem(id, focusId) {
   editingId = id;
   const it = id ? items.find((i) => i.id === id) : null;
-  $("dItemTitle").textContent = it ? "품목 정보 수정" : "품목 추가";
+  $("dItemTitle").textContent = it ? `${BOOKS[bookOf(it)]} 정보 수정` : `${BOOKS[book]} 추가`;
   $("iName").value = it?.name || "";
   $("iCat").value = it?.category || catFilter;
   $("iLoc").value = it?.location || "";
@@ -381,7 +392,7 @@ document.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("cli
 // ---------- category management ----------
 function renderCatRows() {
   const counts = new Map();
-  items.forEach((i) => { const c = (i.category || "").trim(); counts.set(c, (counts.get(c) || 0) + 1); });
+  curItems().forEach((i) => { const c = (i.category || "").trim(); counts.set(c, (counts.get(c) || 0) + 1); });
   const cats = [...counts.keys()].sort((a, b) => (a === "") - (b === "") || a.localeCompare(b, "ko"));
   $("catRows").replaceChildren(...cats.map((c, idx) => {
     const input = el("input", { type: "text", id: "cat-" + idx, maxlength: "40", value: c, placeholder: "분류 없음", "aria-label": `${c || "분류 없음"} 새 이름` });
@@ -395,7 +406,7 @@ function renderCatRows() {
 // 품목마다 정보 수정 기록이 로그인 계정으로 남습니다
 async function renameCategory(from, to) {
   if (busy) return;
-  const targets = items.filter((i) => (i.category || "").trim() === from);
+  const targets = curItems().filter((i) => (i.category || "").trim() === from);
   if (!targets.length || from === to) return;
   busy = true;
   $("cErr").textContent = "";
@@ -418,12 +429,12 @@ async function renameCategory(from, to) {
     setTimeout(renderCatRows, 300);
   }
 }
-$("btnCats").addEventListener("click", () => { $("cErr").textContent = ""; renderCatRows(); $("dCats").showModal(); });
+$("btnCats").addEventListener("click", () => { $("cErr").textContent = ""; $("cTitle").textContent = `${BOOKS[book]} 분류 관리`; renderCatRows(); $("dCats").showModal(); });
 
 // ---------- bulk import ----------
 let impRows = [];
 function parseImport(text) {
-  const existing = new Set(items.map((i) => (i.name || "").trim().toLowerCase()));
+  const existing = new Set(curItems().map((i) => (i.name || "").trim().toLowerCase()));
   const seen = new Set();
   const rows = [];
   const isInt = (s) => /^\d+$/.test(s);
@@ -460,24 +471,25 @@ function renderImport() {
   $("impSave").textContent = ok.length ? `${ok.length}개 등록${skip ? ` (${skip}개 건너뜀)` : ""}` : "등록";
 }
 $("btnImport").addEventListener("click", () => {
+  $("impTitle").textContent = `${BOOKS[book]} 일괄 등록`;
   $("impText").value = ""; renderImport();
   $("dImport").showModal(); $("impText").focus();
 });
 $("impText").addEventListener("input", renderImport);
 $("fImport").addEventListener("submit", async (ev) => {
   ev.preventDefault();
-  const todo = impRows.filter((r) => !r.error && !r.skip);
+  const todo = impRows.filter((r) => !r.error && !r.skip), bk = book;
   $("impSave").disabled = true; $("impText").disabled = true;
   let done = 0;
   try {
     // 품목마다 등록 기록과 함께 한 번씩 저장합니다 (보안 규칙이 품목+기록 짝을 확인)
     for (const r of todo) {
       $("impSave").textContent = `등록 중 ${done + 1}/${todo.length}`;
-      await createItem({ name: r.name, category: r.category, location: r.location, unit: r.unit, minQty: r.minQty, note: "" }, r.qty);
+      await createItem({ name: r.name, category: r.category, location: r.location, unit: r.unit, minQty: r.minQty, note: "" }, r.qty, bk);
       done++;
     }
     $("dImport").close();
-    toast(`${done}개 품목을 등록했습니다`);
+    toast(`${BOOKS[bk]} ${done}개 품목을 등록했습니다`);
   } catch (e) {
     $("impErr").textContent = `${done}개 등록 후 멈췄습니다. ${errMsg(e)}`;
     renderImport();
@@ -501,24 +513,34 @@ $("fMember").addEventListener("submit", async (ev) => {
 // ---------- toolbar / tabs ----------
 $("q").addEventListener("input", renderItems);
 $("btnAdd").addEventListener("click", () => openItem(null));
-function showTab(which) {
-  document.querySelectorAll(".tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === which)));
+function showTab(which, bk) {
+  if (which === "items" && BOOKS[bk] && bk !== book) {
+    book = bk; logBook = bk; catFilter = ""; lowOnly = false; $("q").value = "";
+    renderCats(); renderItems(); renderLog();
+  }
+  $("btnAdd").textContent = `+ ${BOOKS[book]} 추가`;
+  document.querySelectorAll(".tabs button").forEach((b) =>
+    b.setAttribute("aria-selected", String(b.dataset.tab === which && (which !== "items" || b.dataset.book === book))));
   $("viewItems").hidden = which !== "items";
   $("viewLog").hidden = which !== "log";
   $("viewMembers").hidden = which !== "members";
-  try { localStorage.setItem("stock.tab", which); } catch (e) {}
+  try { localStorage.setItem("stock.tab", which); localStorage.setItem("stock.book", book); } catch (e) {}
 }
-document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
-try { const t = localStorage.getItem("stock.tab"); if (t) showTab(t); } catch (e) {}
+document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab, b.dataset.book)));
+document.querySelectorAll("#logBooks .chip").forEach((c) => c.addEventListener("click", () => { logBook = c.dataset.book; renderLog(); }));
+try {
+  const t = localStorage.getItem("stock.tab"), b = localStorage.getItem("stock.book");
+  showTab(t || "items", b && BOOKS[b] ? b : "parts");
+} catch (e) {}
 
 $("btnCsv").addEventListener("click", () => {
   const esc = (v) => { const s = String(v ?? ""); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
   const head = ["품목", "분류", "위치", "수량", "단위", "최소 수량", "상태", "메모", "최근 변경자", "최근 변경 시각"];
-  const rows = items.map((i) => [i.name, i.category, i.location, i.qty, i.unit, i.minQty, STATUS_LABEL[status(i)], i.note,
+  const rows = curItems().map((i) => [i.name, i.category, i.location, i.qty, i.unit, i.minQty, STATUS_LABEL[status(i)], i.note,
     i.updatedBy, i.updatedAt ? new Date(i.updatedAt).toLocaleString("ko-KR") : ""]);
   const csv = "﻿" + [head, ...rows].map((r) => r.map(esc).join(",")).join("\r\n");
   const d = new Date(), stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
-  const a = el("a", { href: URL.createObjectURL(new Blob([csv], { type: "text/csv" })), download: `재고_${stamp}.csv` });
+  const a = el("a", { href: URL.createObjectURL(new Blob([csv], { type: "text/csv" })), download: `${BOOKS[book]}_${stamp}.csv` });
   document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 });
