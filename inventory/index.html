@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" crossorigin="anonymous" />
-<link rel="stylesheet" href="styles.css?v=8" />
+<link rel="stylesheet" href="styles.css?v=9" />
 </head>
 <body>
 <div class="wrap">
@@ -118,10 +118,12 @@
 
     <section id="viewLog" class="view" hidden>
       <div class="chips" id="logBooks" role="group" aria-label="기록 장부"><button type="button" class="chip" data-book="parts" aria-pressed="true">부속 기록</button><button type="button" class="chip" data-book="goods" aria-pressed="false">상품 기록</button></div>
+      <input class="search" type="search" id="logQ" placeholder="품목명, 사람, 메모, 입고·출고 검색" />
       <div class="panel">
         <ul class="log" id="log"></ul>
         <div class="empty" id="logEmpty" hidden><strong>아직 기록이 없습니다</strong><span>품목을 추가하거나 입고·출고하면 누가 언제 바꿨는지 여기에 남습니다.</span></div>
       </div>
+      <div class="logmore"><span class="meta" id="logInfo"></span><button class="btn" id="btnLogMore" hidden>이전 기록 더 불러오기</button></div>
     </section>
 
     <section id="viewMembers" class="view" hidden>
@@ -233,6 +235,6 @@
 </dialog>
 
 <div class="toast" id="toast" hidden role="status"></div>
-<script type="module" src="app.js?v=6"></script>
+<script type="module" src="app.js?v=7"></script>
 </body>
 </html>

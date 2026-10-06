@@ -18,6 +18,10 @@ let book = "parts", logBook = "parts";
 const bookOf = (x) => (x && x.book) || "parts";
 const curItems = () => items.filter((i) => bookOf(i) === book);
 
+// 기록은 최근 것부터 300건씩 불러옵니다. 오래된 기록은 버튼으로 더 불러옵니다(읽기 사용량을 아끼려고).
+const LOG_PAGE = 300;
+let logLimit = LOG_PAGE, logUnsub = null;
+
 // 선택 삭제 모드 (관리자)
 let selectMode = false;
 const selected = new Set();
@@ -171,9 +175,13 @@ function renderItems() {
 }
 
 const TYPE_LABEL = { in: "입고", out: "출고", adjust: "실사 조정", create: "등록", edit: "정보 수정", delete: "삭제" };
+// 기록 검색: 품목명·사람·이메일·메모·종류(입고/출고 등)·날짜를 띄어쓰기로 나눈 단어가 모두 들어간 기록만 보여 줍니다
+const logText = (l) => [l.itemName, l.byName, l.by, l.note, TYPE_LABEL[l.type], fmtWhen(l.at)].join(" ").toLowerCase();
 function renderLog() {
   document.querySelectorAll("#logBooks .chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.book === logBook)));
-  const list = logs.filter((l) => bookOf(l) === logBook);
+  const words = $("logQ").value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const inBook = logs.filter((l) => bookOf(l) === logBook);
+  const list = words.length ? inBook.filter((l) => { const t = logText(l); return words.every((w) => t.includes(w)); }) : inBook;
   $("log").replaceChildren(...list.map((l) => {
     let delta = "", cls = "neu";
     if (l.type === "in") { delta = "+" + fmtN(l.delta); cls = "in"; }
@@ -191,6 +199,14 @@ function renderLog() {
     );
   }));
   $("logEmpty").hidden = list.length > 0;
+  $("logEmpty").replaceChildren(...(words.length
+    ? [el("strong", {}, "검색 결과가 없습니다"), el("span", {}, logs.length >= logLimit ? "아래 [이전 기록 더 불러오기]로 더 오래된 기록까지 찾아보세요." : "다른 단어로 찾아보세요.")]
+    : [el("strong", {}, "아직 기록이 없습니다"), el("span", {}, "품목을 추가하거나 입고·출고하면 누가 언제 바꿨는지 여기에 남습니다.")]));
+  const oldest = logs.length ? fmtWhen(logs[logs.length - 1].at) : "";
+  $("logInfo").textContent = !logs.length ? "" : words.length
+    ? `${fmtN(list.length)}건 찾음 · 최근 ${fmtN(logs.length)}건(${oldest}부터) 안에서 검색`
+    : `최근 ${fmtN(logs.length)}건 불러옴 (${oldest}부터)`;
+  $("btnLogMore").hidden = logs.length < logLimit;
   renderStats();
 }
 
@@ -639,7 +655,27 @@ $("btnCsv").addEventListener("click", () => {
 });
 
 // ---------- auth & data ----------
-function stopData() { unsubs.forEach((u) => u()); unsubs = []; items = []; logs = []; members = []; }
+function stopData() {
+  unsubs.forEach((u) => u()); unsubs = []; items = []; logs = []; members = [];
+  if (logUnsub) { logUnsub(); logUnsub = null; }
+  logLimit = LOG_PAGE;
+}
+
+function subscribeLogs() {
+  if (logUnsub) logUnsub();
+  const opts = { serverTimestamps: "estimate" };
+  logUnsub = fs.onSnapshot(fs.query(fs.collection(db, "logs"), fs.orderBy("at", "desc"), fs.limit(logLimit)), (snap) => {
+    logs = snap.docs.map((d) => { const x = d.data(opts); return { id: d.id, ...x, at: millis(x.at) }; });
+    $("btnLogMore").disabled = false;
+    renderLog();
+  }, lostAccess);
+}
+$("btnLogMore").addEventListener("click", () => {
+  logLimit += LOG_PAGE;
+  $("btnLogMore").disabled = true;
+  subscribeLogs();
+});
+$("logQ").addEventListener("input", renderLog);
 
 function lostAccess(e) {
   if (e && e.code === "permission-denied") { stopData(); role = null; $("deniedEmail").textContent = me?.email || ""; show("scrDenied"); }
@@ -652,10 +688,7 @@ function startData() {
     items = snap.docs.map((d) => { const x = d.data(opts); return { id: d.id, ...x, updatedAt: millis(x.updatedAt) }; });
     renderCats(); renderItems();
   }, lostAccess));
-  unsubs.push(fs.onSnapshot(fs.query(fs.collection(db, "logs"), fs.orderBy("at", "desc"), fs.limit(300)), (snap) => {
-    logs = snap.docs.map((d) => { const x = d.data(opts); return { id: d.id, ...x, at: millis(x.at) }; });
-    renderLog();
-  }, lostAccess));
+  subscribeLogs();
   unsubs.push(fs.onSnapshot(fs.collection(db, "members"), (snap) => {
     members = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     const mine = members.find((m) => m.id === me.email);
