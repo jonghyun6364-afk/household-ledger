@@ -1,0 +1,124 @@
+rules_version = '2';
+
+// 재고장 보안 규칙
+// - 구글 로그인 + members 컬렉션에 등록된 이메일만 읽고 쓸 수 있습니다.
+// - 품목 수량이 바뀔 때마다 같은 요청 안에서 기록(logs)이 반드시 함께 남아야 하며,
+//   기록의 '누가'(by)는 로그인한 구글 계정 이메일과 일치해야 합니다.
+// - 기록은 수정·삭제할 수 없습니다.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 항상 관리자인 계정. firebase-config.js 의 OWNER_EMAIL 과 같아야 합니다.
+    function ownerEmail() { return 'jonghyun6364@gmail.com'; }
+
+    function signedIn() {
+      return request.auth != null
+        && request.auth.token.email is string
+        && request.auth.token.email_verified == true;
+    }
+    function email() { return request.auth.token.email.lower(); }
+    function memberPath(e) { return /databases/$(database)/documents/members/$(e); }
+    function itemPath(id) { return /databases/$(database)/documents/items/$(id); }
+    function logPath(id) { return /databases/$(database)/documents/logs/$(id); }
+
+    function isOwner() { return signedIn() && email() == ownerEmail(); }
+    function isMember() { return isOwner() || (signedIn() && exists(memberPath(email()))); }
+    function isAdmin() {
+      return isOwner()
+        || (signedIn() && exists(memberPath(email())) && get(memberPath(email())).data.role == 'admin');
+    }
+    function str(v, max) { return v is string && v.size() <= max; }
+
+    // ---------- 팀원 ----------
+    function validMember(mEmail) {
+      let d = request.resource.data;
+      return mEmail == mEmail.lower()
+        && d.keys().hasAll(['role', 'addedBy', 'addedAt'])
+        && d.keys().hasOnly(['role', 'name', 'addedBy', 'addedAt'])
+        && d.role in ['admin', 'member']
+        && d.addedBy == email()
+        && d.addedAt == request.time
+        && (!('name' in d) || str(d.name, 100));
+    }
+
+    match /members/{mEmail} {
+      allow read: if isMember();
+      allow create, update: if isAdmin() && validMember(mEmail);
+      // 본인 표시 이름만 스스로 갱신
+      allow update: if signedIn() && mEmail == email()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
+        && str(request.resource.data.name, 100);
+      allow delete: if isAdmin() && mEmail != email();
+    }
+
+    // ---------- 품목 ----------
+    function validItem() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['name', 'category', 'location', 'unit', 'note', 'qty', 'minQty',
+                               'createdBy', 'createdAt', 'updatedBy', 'updatedByName', 'updatedAt', 'lastLogId'])
+        && str(d.name, 80) && d.name.size() > 0
+        && str(d.category, 40) && str(d.location, 30) && str(d.unit, 10) && str(d.note, 200)
+        && d.qty is int && d.qty >= 0
+        && d.minQty is int && d.minQty >= 0
+        && d.updatedBy == email()
+        && str(d.updatedByName, 100)
+        && d.updatedAt == request.time;
+    }
+    // 이번 요청에서 새로 만들어지는 기록이 이 품목을 가리켜야 함
+    function loggedWith(itemId) {
+      let logId = request.resource.data.lastLogId;
+      return logId is string
+        && !exists(logPath(logId))
+        && existsAfter(logPath(logId))
+        && getAfter(logPath(logId)).data.itemId == itemId;
+    }
+
+    match /items/{itemId} {
+      allow read: if isMember();
+      allow create: if isMember() && validItem() && loggedWith(itemId)
+        && request.resource.data.createdBy == email()
+        && request.resource.data.createdAt == request.time;
+      allow update: if isMember() && validItem() && loggedWith(itemId)
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isAdmin();
+    }
+
+    // ---------- 입출고 기록 ----------
+    function validLog() {
+      let d = request.resource.data;
+      return d.keys().hasAll(['itemId', 'itemName', 'unit', 'type', 'delta', 'qtyAfter', 'note', 'by', 'byName', 'at'])
+        && d.keys().hasOnly(['itemId', 'itemName', 'unit', 'type', 'delta', 'qtyAfter', 'note', 'by', 'byName', 'at'])
+        && d.itemId is string && str(d.itemName, 80) && str(d.unit, 10) && str(d.note, 200)
+        && d.type in ['create', 'in', 'out', 'adjust', 'edit', 'delete']
+        && d.delta is int && d.qtyAfter is int
+        && d.by == email() && str(d.byName, 100)
+        && d.at == request.time;
+    }
+    // 기록의 수량 변화가 실제 품목 변화와 정확히 일치해야 함
+    function matchesItem(logId) {
+      let d = request.resource.data;
+      let p = itemPath(d.itemId);
+      return (d.type == 'delete'
+               && isAdmin() && exists(p) && !existsAfter(p)
+               && d.delta == 0 && d.qtyAfter == get(p).data.qty)
+        || (d.type != 'delete'
+               && existsAfter(p)
+               && getAfter(p).data.lastLogId == logId
+               && getAfter(p).data.qty == d.qtyAfter
+               && ((d.type == 'create' && !exists(p) && d.delta == d.qtyAfter)
+                   || (d.type != 'create' && exists(p)
+                       && d.delta == d.qtyAfter - get(p).data.qty
+                       && ((d.type == 'in' && d.delta > 0)
+                           || (d.type == 'out' && d.delta < 0)
+                           || d.type == 'adjust'
+                           || (d.type == 'edit' && d.delta == 0)))));
+    }
+
+    match /logs/{logId} {
+      allow read: if isMember();
+      allow create: if isMember() && validLog() && matchesItem(logId);
+      allow update, delete: if false;
+    }
+  }
+}

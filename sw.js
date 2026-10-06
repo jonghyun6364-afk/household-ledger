@@ -27,6 +27,9 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
+  // Leave the inventory app and Firebase (auth, Firestore streams, SDK) alone; caching them breaks realtime sync
+  const url = new URL(event.request.url);
+  if (url.pathname.includes("/inventory/") || /googleapis\.com$|firebaseapp\.com$|^www\.gstatic\.com$|^apis\.google\.com$/.test(url.hostname) && url.hostname !== "fonts.googleapis.com") return;
   event.respondWith(
     caches.match(event.request).then((cached) => {
       const networkFetch = fetch(event.request)
