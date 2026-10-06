@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" crossorigin="anonymous" />
-<link rel="stylesheet" href="styles.css?v=5" />
+<link rel="stylesheet" href="styles.css?v=8" />
 </head>
 <body>
 <div class="wrap">
@@ -87,21 +87,29 @@
           <button class="btn" id="btnCats">분류 관리</button>
           <button class="btn" id="btnCsv">CSV 내보내기</button>
           <button class="btn" id="btnImport" hidden>일괄 등록</button>
+          <button class="btn" id="btnSelect" hidden>선택 삭제</button>
           <button class="btn primary" id="btnAdd">+ 품목 추가</button>
         </div>
       </div>
       <div class="chips" id="catChips" role="group" aria-label="분류 필터"></div>
+      <div class="selbar" id="selBar" hidden>
+        <label class="chk"><input type="checkbox" id="selAll" /> 전체 선택</label>
+        <span id="selCount">0개 선택</span>
+        <span class="spacer"></span>
+        <button class="btn" id="selCancel">취소</button>
+        <button class="btn danger solid" id="selDelete" disabled>삭제</button>
+      </div>
       <div class="panel">
         <div id="listWrap">
           <div class="tbl-wrap">
             <table>
               <thead><tr>
-                <th>품목</th><th>분류</th><th class="r">현재 수량</th><th>최근 변경</th><th class="r">입출고</th>
+                <th class="selcol" hidden></th><th>품목</th><th>분류</th><th class="r">현재 수량</th><th>최근 변경</th><th class="r">입출고</th>
               </tr></thead>
               <tbody id="rows"></tbody>
             </table>
           </div>
-          <p class="mhint">이름을 누르면 입출고, 분류를 누르면 수정</p>
+          <p class="mhint">이름을 누르면 입출고</p>
           <ul class="mlist" id="mrows"></ul>
         </div>
         <div class="empty" id="empty" hidden></div>
@@ -145,7 +153,7 @@
     </div>
     <datalist id="catList"></datalist>
     <div class="row2">
-      <div class="field" id="iQtyField"><label for="iQty">시작 수량</label><input type="number" id="iQty" min="0" step="1" value="0" inputmode="numeric" /></div>
+      <div class="field" id="iQtyField"><label for="iQty" id="iQtyLabel">시작 수량</label><input type="number" id="iQty" min="0" step="1" value="0" inputmode="numeric" /></div>
       <div class="field"><label for="iUnit">단위</label><input type="text" id="iUnit" maxlength="10" placeholder="개, 박스, kg" /></div>
     </div>
     <div class="field"><label for="iMin">최소 수량 (이하이면 '부족' 표시)</label><input type="number" id="iMin" min="0" step="1" value="0" inputmode="numeric" /></div>
@@ -184,6 +192,19 @@
   </form>
 </dialog>
 
+<!-- 삭제 확인 -->
+<dialog id="dConfirm">
+  <form class="dlg" id="fConfirm">
+    <h2 id="cfTitle">삭제할까요?</h2>
+    <p class="meta" id="cfMsg"></p>
+    <p class="err" id="cfErr"></p>
+    <div class="dlg-foot">
+      <button type="button" class="btn" data-close>취소</button>
+      <button type="submit" class="btn danger solid" id="cfOk">삭제</button>
+    </div>
+  </form>
+</dialog>
+
 <!-- 분류 관리 -->
 <dialog id="dCats">
   <form class="dlg" id="fCats">
@@ -212,6 +233,6 @@
 </dialog>
 
 <div class="toast" id="toast" hidden role="status"></div>
-<script type="module" src="app.js?v=5"></script>
+<script type="module" src="app.js?v=6"></script>
 </body>
 </html>

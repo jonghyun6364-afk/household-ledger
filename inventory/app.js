@@ -18,6 +18,10 @@ let book = "parts", logBook = "parts";
 const bookOf = (x) => (x && x.book) || "parts";
 const curItems = () => items.filter((i) => bookOf(i) === book);
 
+// 선택 삭제 모드 (관리자)
+let selectMode = false;
+const selected = new Set();
+
 // ---------- helpers ----------
 function el(tag, attrs = {}, ...kids) {
   const n = document.createElement(tag);
@@ -113,8 +117,18 @@ function renderItems() {
   const plus = (it) => el("button", { class: "step in", title: "1개 입고", "aria-label": `${it.name} 1개 입고`, onclick: () => quick(it.id, 1) }, "+");
   const who = (it) => it.updatedAt ? `${it.updatedByName || it.updatedBy} · ${fmtWhen(it.updatedAt)}` : "";
 
+  const selBox = (it) => {
+    const c = el("input", { type: "checkbox", class: "sel", "aria-label": `${it.name} 선택` });
+    c.checked = selected.has(it.id);
+    c.addEventListener("change", () => { c.checked ? selected.add(it.id) : selected.delete(it.id); renderSelBar(list); });
+    return c;
+  };
+  const delBtn = (it) => isAdmin() ? el("button", { class: "link del", onclick: () => confirmDelete([it]) }, "삭제") : null;
+
   // 넓은 화면: 표
+  document.querySelector("th.selcol").hidden = !selectMode;
   $("rows").replaceChildren(...list.map((it) => el("tr", {},
+    selectMode ? el("td", { class: "selcol" }, selBox(it)) : null,
     el("td", {}, el("div", { class: "iname" }, it.name || "(이름 없음)", it.note ? el("small", {}, it.note) : null)),
     el("td", {}, el("button", { class: "catbtn", title: "분류 바꾸기", onclick: () => openItem(it.id, "iCat") }, it.category || "분류 없음")),
     el("td", { class: "r" }, qtyEl(it)),
@@ -123,18 +137,24 @@ function renderItems() {
       minus(it), plus(it),
       el("button", { class: "link", onclick: () => openMove(it.id) }, "입출고"),
       el("button", { class: "link", onclick: () => openItem(it.id) }, "수정"),
+      delBtn(it),
     )),
   )));
 
   // 휴대폰: 한 줄 카드 — 이름을 누르면 입출고, 분류를 누르면 수정
   $("mrows").replaceChildren(...list.map((it) => el("li", { class: "mrow " + status(it) },
+    selectMode ? selBox(it) : null,
     el("div", { class: "minfo" },
       el("button", { class: "mname", onclick: () => openMove(it.id) }, it.name || "(이름 없음)"),
       el("div", { class: "mmeta" },
         el("button", { class: "catbtn", title: "품목 수정", onclick: () => openItem(it.id, "iCat") }, it.category || "분류 없음"),
-        who(it) ? el("span", {}, who(it)) : null)),
+        who(it) ? el("span", {}, who(it)) : null,
+        el("span", { class: "mact" },
+          el("button", { class: "link", onclick: () => openItem(it.id) }, "수정"),
+          delBtn(it)))),
     el("div", { class: "mstep" }, minus(it), qtyEl(it), plus(it)),
   )));
+  renderSelBar(list);
 
   const empty = $("empty");
   if (!all.length) {
@@ -252,17 +272,20 @@ async function createItem(fields, qty, bk = book) {
   await b.commit();
 }
 
-async function editItem(itemId, fields) {
+async function editItem(itemId, fields, newQty = null) {
   const itemRef = fs.doc(db, "items", itemId);
   const logRef = fs.doc(fs.collection(db, "logs"));
   await fs.runTransaction(db, async (tx) => {
     const snap = await tx.get(itemRef);
     if (!snap.exists()) throw { code: "gone" };
     const cur = Number(snap.data().qty) || 0, bk = bookOf(snap.data());
-    tx.update(itemRef, { ...fields, updatedBy: me.email, updatedByName: me.name, updatedAt: fs.serverTimestamp(), lastLogId: logRef.id });
+    // 수량도 바꿨으면 실사 조정 기록으로 남깁니다
+    const next = newQty === null ? cur : newQty;
+    const qtyChanged = next !== cur;
+    tx.update(itemRef, { ...fields, qty: next, updatedBy: me.email, updatedByName: me.name, updatedAt: fs.serverTimestamp(), lastLogId: logRef.id });
     tx.set(logRef, {
-      itemId, itemName: fields.name, unit: fields.unit, type: "edit", delta: 0, qtyAfter: cur,
-      note: "", by: me.email, byName: me.name, at: fs.serverTimestamp(), book: bk,
+      itemId, itemName: fields.name, unit: fields.unit, type: qtyChanged ? "adjust" : "edit", delta: next - cur, qtyAfter: next,
+      note: qtyChanged ? "수정 창에서 수량 변경" : "", by: me.email, byName: me.name, at: fs.serverTimestamp(), book: bk,
     });
   });
 }
@@ -308,8 +331,8 @@ function openItem(id, focusId) {
   $("iUnit").value = it?.unit || "";
   $("iMin").value = it ? (it.minQty || 0) : 0;
   $("iNote").value = it?.note || "";
-  $("iQty").value = 0;
-  $("iQtyField").hidden = !!it;
+  $("iQty").value = it ? (Number(it.qty) || 0) : 0;
+  $("iQtyLabel").textContent = it ? "현재 수량" : "시작 수량";
   $("btnDel").hidden = !it || !isAdmin();
   $("delConfirm").hidden = true;
   $("iErr").textContent = "";
@@ -327,13 +350,16 @@ $("fItem").addEventListener("submit", async (ev) => {
   };
   $("iSave").disabled = true;
   try {
-    if (editingId) { await editItem(editingId, fields); toast("수정했습니다"); }
+    if (editingId) { await editItem(editingId, fields, toInt($("iQty").value)); toast("수정했습니다"); }
     else { await createItem(fields, toInt($("iQty").value)); toast(`${name} 등록했습니다`); }
     $("dItem").close();
   } catch (e) { $("iErr").textContent = errMsg(e); }
   finally { $("iSave").disabled = false; }
 });
-$("btnDel").addEventListener("click", () => { $("delConfirm").hidden = false; });
+$("btnDel").addEventListener("click", () => {
+  const it = items.find((i) => i.id === editingId);
+  if (it) { $("dItem").close(); confirmDelete([it]); }
+});
 $("delNo").addEventListener("click", () => { $("delConfirm").hidden = true; });
 $("delYes").addEventListener("click", async () => {
   const it = items.find((i) => i.id === editingId);
@@ -388,6 +414,72 @@ $("fMove").addEventListener("submit", async (ev) => {
   finally { $("mSave").disabled = false; }
 });
 document.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", () => b.closest("dialog").close()));
+
+// ---------- delete (single & bulk) ----------
+let confirmAction = null;
+function confirmDelete(list) {
+  const names = list.map((i) => i.name);
+  $("cfTitle").textContent = list.length === 1 ? `"${names[0]}" 삭제할까요?` : `${list.length}개 품목을 삭제할까요?`;
+  $("cfMsg").textContent = (list.length > 1 ? names.slice(0, 8).join(", ") + (names.length > 8 ? ` 외 ${names.length - 8}개` : "") + ". " : "")
+    + "삭제해도 입출고 기록은 남습니다.";
+  $("cfErr").textContent = "";
+  $("cfOk").disabled = false;
+  $("cfOk").textContent = list.length === 1 ? "삭제" : `${list.length}개 삭제`;
+  confirmAction = async () => {
+    let done = 0;
+    try {
+      for (const it of list) {
+        if (list.length > 1) $("cfOk").textContent = `삭제 중 ${done + 1}/${list.length}`;
+        await deleteItem(it.id);
+        selected.delete(it.id);
+        done++;
+      }
+      $("dConfirm").close();
+      toast(list.length === 1 ? `${names[0]} 삭제했습니다` : `${done}개 품목을 삭제했습니다`);
+      if (selectMode && !selected.size) setSelectMode(false);
+    } catch (e) {
+      $("cfErr").textContent = (list.length > 1 ? `${done}개 삭제 후 멈췄습니다. ` : "") + errMsg(e);
+      $("cfOk").textContent = "다시 시도";
+      list = list.slice(done);
+    }
+  };
+  $("dConfirm").showModal();
+}
+$("fConfirm").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  if (!confirmAction) return;
+  $("cfOk").disabled = true;
+  try { await confirmAction(); } finally { $("cfOk").disabled = false; }
+});
+
+function setSelectMode(on) {
+  selectMode = on;
+  selected.clear();
+  $("btnSelect").textContent = on ? "선택 끝내기" : "선택 삭제";
+  renderItems();
+}
+let shownList = [];
+function renderSelBar(list) {
+  shownList = list;
+  $("selBar").hidden = !selectMode;
+  if (!selectMode) return;
+  const visible = list.filter((i) => selected.has(i.id)).length;
+  $("selCount").textContent = `${selected.size}개 선택`;
+  $("selDelete").disabled = !selected.size;
+  $("selDelete").textContent = selected.size ? `${selected.size}개 삭제` : "삭제";
+  $("selAll").checked = list.length > 0 && visible === list.length;
+}
+$("btnSelect").addEventListener("click", () => setSelectMode(!selectMode));
+$("selCancel").addEventListener("click", () => setSelectMode(false));
+// 전체 선택은 지금 화면에 보이는(검색·분류로 걸러진) 품목만 대상으로 합니다
+$("selAll").addEventListener("change", (e) => {
+  shownList.forEach((i) => (e.target.checked ? selected.add(i.id) : selected.delete(i.id)));
+  renderItems();
+});
+$("selDelete").addEventListener("click", () => {
+  const list = items.filter((i) => selected.has(i.id));
+  if (list.length) confirmDelete(list);
+});
 
 // ---------- category management ----------
 function renderCatRows() {
@@ -516,6 +608,7 @@ $("btnAdd").addEventListener("click", () => openItem(null));
 function showTab(which, bk) {
   if (which === "items" && BOOKS[bk] && bk !== book) {
     book = bk; logBook = bk; catFilter = ""; lowOnly = false; $("q").value = "";
+    selectMode = false; selected.clear(); $("btnSelect").textContent = "선택 삭제";
     renderCats(); renderItems(); renderLog();
   }
   $("btnAdd").textContent = `+ ${BOOKS[book]} 추가`;
@@ -581,6 +674,7 @@ function renderHeader() {
   $("whoRole").textContent = role === "admin" ? "관리자" : role === "member" ? "팀원" : "";
   $("whoRole").hidden = !role;
   $("btnImport").hidden = !isAdmin();
+  $("btnSelect").hidden = !isAdmin();
 }
 
 async function onUser(u) {
