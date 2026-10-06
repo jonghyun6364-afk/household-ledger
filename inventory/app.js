@@ -18,9 +18,12 @@ let book = "parts", logBook = "parts";
 const bookOf = (x) => (x && x.book) || "parts";
 const curItems = () => items.filter((i) => bookOf(i) === book);
 
-// 기록은 최근 것부터 300건씩 불러옵니다. 오래된 기록은 버튼으로 더 불러옵니다(읽기 사용량을 아끼려고).
-const LOG_PAGE = 300;
-let logLimit = LOG_PAGE, logUnsub = null;
+// 기록은 부속·상품 각각 최근 30건만 보여 주고, 버튼으로 30건씩 더 봅니다(읽기 사용량을 아끼려고).
+// 두 장부의 기록이 한 컬렉션에 섞여 있어서, 보고 있는 장부가 30건을 채울 때까지 서버에서 조금씩 더 읽어 옵니다.
+const LOG_PAGE = 30;
+let logLimit = LOG_PAGE, logUnsub = null, logsMore = false;
+const logWant = { parts: LOG_PAGE, goods: LOG_PAGE };
+let todayLogs = [], todayUnsub = null;
 
 // 선택 삭제 모드 (관리자)
 let selectMode = false;
@@ -86,7 +89,7 @@ function renderStats() {
   $("sLow").textContent = fmtN(list.filter((i) => status(i) === "low").length);
   $("sOut").textContent = fmtN(list.filter((i) => status(i) === "out").length);
   const today = new Date().toDateString();
-  $("sToday").textContent = fmtN(logs.filter((l) => bookOf(l) === book && (l.type === "in" || l.type === "out") && new Date(l.at).toDateString() === today).length);
+  $("sToday").textContent = fmtN(todayLogs.filter((l) => bookOf(l) === book && (l.type === "in" || l.type === "out") && new Date(l.at).toDateString() === today).length);
 }
 
 // 분류 필터: 칩으로 고르고, 부족만 보기도 칩 하나로 둡니다
@@ -180,7 +183,9 @@ const logText = (l) => [l.itemName, l.byName, l.by, l.note, TYPE_LABEL[l.type], 
 function renderLog() {
   document.querySelectorAll("#logBooks .chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.book === logBook)));
   const words = $("logQ").value.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const inBook = logs.filter((l) => bookOf(l) === logBook);
+  const bookAll = logs.filter((l) => bookOf(l) === logBook);
+  const inBook = bookAll.slice(0, logWant[logBook]);
+  const hasMore = bookAll.length > inBook.length || logsMore;
   const list = words.length ? inBook.filter((l) => { const t = logText(l); return words.every((w) => t.includes(w)); }) : inBook;
   $("log").replaceChildren(...list.map((l) => {
     let delta = "", cls = "neu";
@@ -200,13 +205,13 @@ function renderLog() {
   }));
   $("logEmpty").hidden = list.length > 0;
   $("logEmpty").replaceChildren(...(words.length
-    ? [el("strong", {}, "검색 결과가 없습니다"), el("span", {}, logs.length >= logLimit ? "아래 [이전 기록 더 불러오기]로 더 오래된 기록까지 찾아보세요." : "다른 단어로 찾아보세요.")]
+    ? [el("strong", {}, "검색 결과가 없습니다"), el("span", {}, hasMore ? "아래 [이전 기록 30건 더 보기]로 더 오래된 기록까지 찾아보세요." : "다른 단어로 찾아보세요.")]
     : [el("strong", {}, "아직 기록이 없습니다"), el("span", {}, "품목을 추가하거나 입고·출고하면 누가 언제 바꿨는지 여기에 남습니다.")]));
-  const oldest = logs.length ? fmtWhen(logs[logs.length - 1].at) : "";
-  $("logInfo").textContent = !logs.length ? "" : words.length
-    ? `${fmtN(list.length)}건 찾음 · 최근 ${fmtN(logs.length)}건(${oldest}부터) 안에서 검색`
-    : `최근 ${fmtN(logs.length)}건 불러옴 (${oldest}부터)`;
-  $("btnLogMore").hidden = logs.length < logLimit;
+  const oldest = inBook.length ? fmtWhen(inBook[inBook.length - 1].at) : "";
+  $("logInfo").textContent = !inBook.length ? "" : words.length
+    ? `${fmtN(list.length)}건 찾음 · 최근 ${fmtN(inBook.length)}건(${oldest}부터) 안에서 검색`
+    : `최근 ${fmtN(inBook.length)}건 (${oldest}부터)`;
+  $("btnLogMore").hidden = !hasMore;
   renderStats();
 }
 
@@ -625,7 +630,7 @@ function showTab(which, bk) {
   if (which === "items" && BOOKS[bk] && bk !== book) {
     book = bk; logBook = bk; catFilter = ""; lowOnly = false; $("q").value = "";
     selectMode = false; selected.clear(); $("btnSelect").textContent = "선택 삭제";
-    renderCats(); renderItems(); renderLog();
+    renderCats(); renderItems(); renderLog(); ensureLogs();
   }
   $("btnAdd").textContent = `+ ${BOOKS[book]} 추가`;
   document.querySelectorAll(".tabs button").forEach((b) =>
@@ -636,7 +641,7 @@ function showTab(which, bk) {
   try { localStorage.setItem("stock.tab", which); localStorage.setItem("stock.book", book); } catch (e) {}
 }
 document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab, b.dataset.book)));
-document.querySelectorAll("#logBooks .chip").forEach((c) => c.addEventListener("click", () => { logBook = c.dataset.book; renderLog(); }));
+document.querySelectorAll("#logBooks .chip").forEach((c) => c.addEventListener("click", () => { logBook = c.dataset.book; renderLog(); ensureLogs(); }));
 try {
   const t = localStorage.getItem("stock.tab"), b = localStorage.getItem("stock.book");
   showTab(t || "items", b && BOOKS[b] ? b : "parts");
@@ -658,22 +663,46 @@ $("btnCsv").addEventListener("click", () => {
 function stopData() {
   unsubs.forEach((u) => u()); unsubs = []; items = []; logs = []; members = [];
   if (logUnsub) { logUnsub(); logUnsub = null; }
-  logLimit = LOG_PAGE;
+  if (todayUnsub) { todayUnsub(); todayUnsub = null; }
+  logLimit = LOG_PAGE; logsMore = false; logWant.parts = logWant.goods = LOG_PAGE; todayLogs = [];
 }
 
 function subscribeLogs() {
   if (logUnsub) logUnsub();
   const opts = { serverTimestamps: "estimate" };
-  logUnsub = fs.onSnapshot(fs.query(fs.collection(db, "logs"), fs.orderBy("at", "desc"), fs.limit(logLimit)), (snap) => {
+  const asked = logLimit;
+  logUnsub = fs.onSnapshot(fs.query(fs.collection(db, "logs"), fs.orderBy("at", "desc"), fs.limit(asked)), (snap) => {
     logs = snap.docs.map((d) => { const x = d.data(opts); return { id: d.id, ...x, at: millis(x.at) }; });
+    logsMore = snap.size >= asked;
     $("btnLogMore").disabled = false;
     renderLog();
+    ensureLogs();
   }, lostAccess);
 }
+// 보고 있는 장부의 기록이 원하는 만큼 안 모였고 서버에 더 있으면 읽는 양을 두 배로 늘려 다시 읽습니다
+function ensureLogs() {
+  if (!db || !logUnsub) return;
+  const have = logs.filter((l) => bookOf(l) === logBook).length;
+  if (have < logWant[logBook] && logsMore && logLimit === logs.length) {
+    logLimit *= 2;
+    subscribeLogs();
+  }
+}
+// 오늘 입출고 숫자는 따로 오늘 기록만 읽어서 셉니다(최근 30건 제한과 상관없이 정확하도록)
+function subscribeToday() {
+  if (todayUnsub) todayUnsub();
+  const start = new Date(); start.setHours(0, 0, 0, 0);
+  todayUnsub = fs.onSnapshot(fs.query(fs.collection(db, "logs"), fs.where("at", ">=", fs.Timestamp.fromDate(start)), fs.orderBy("at", "desc")), (snap) => {
+    todayLogs = snap.docs.map((d) => { const x = d.data({ serverTimestamps: "estimate" }); return { book: x.book, type: x.type, at: millis(x.at) }; });
+    renderStats();
+  }, () => {});
+}
 $("btnLogMore").addEventListener("click", () => {
-  logLimit += LOG_PAGE;
+  logWant[logBook] += LOG_PAGE;
   $("btnLogMore").disabled = true;
-  subscribeLogs();
+  renderLog();
+  ensureLogs();
+  $("btnLogMore").disabled = false;
 });
 $("logQ").addEventListener("input", renderLog);
 
@@ -689,6 +718,7 @@ function startData() {
     renderCats(); renderItems();
   }, lostAccess));
   subscribeLogs();
+  subscribeToday();
   unsubs.push(fs.onSnapshot(fs.collection(db, "members"), (snap) => {
     members = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     const mine = members.find((m) => m.id === me.email);
