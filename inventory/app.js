@@ -111,13 +111,12 @@ const byName = (a, b) => (a.name || "").localeCompare(b.name || "", "ko", { nume
 function renderItems() {
   renderStats();
   const q = $("q").value.trim().toLowerCase();
-  const order = { out: 0, low: 1, ok: 2 };
   const all = curItems();
   const list = all
     .filter((i) => !catFilter || (i.category || "") === catFilter)
     .filter((i) => !lowOnly || status(i) !== "ok")
     .filter((i) => !q || [i.name, i.category, i.location, i.note].some((s) => (s || "").toLowerCase().includes(q)))
-    .sort((a, b) => order[status(a)] - order[status(b)] || byName(a, b));
+    .sort(byName); // 이름순(숫자 순서). 없음·부족은 색과 [부족·없음만] 칩으로 찾습니다
 
   const qtyEl = (it) => el("span", { class: "qty " + status(it) }, fmtN(it.qty), el("small", {}, it.unit || ""));
   const minus = (it) => el("button", { class: "step out", title: "1개 출고", "aria-label": `${it.name} 1개 출고`, disabled: (Number(it.qty) || 0) <= 0, onclick: () => quick(it.id, -1) }, "−");
@@ -660,6 +659,14 @@ $("btnCsv").addEventListener("click", () => {
 });
 
 // ---------- auth & data ----------
+// 품목 변경이 연달아 들어와도(일괄 등록 등) 화면은 한 프레임에 한 번만 다시 그립니다
+let itemsRenderQueued = false;
+function scheduleItemsRender() {
+  if (itemsRenderQueued) return;
+  itemsRenderQueued = true;
+  requestAnimationFrame(() => { itemsRenderQueued = false; renderCats(); renderItems(); });
+}
+
 function stopData() {
   unsubs.forEach((u) => u()); unsubs = []; items = []; logs = []; members = [];
   if (logUnsub) { logUnsub(); logUnsub = null; }
@@ -715,7 +722,7 @@ function startData() {
   const opts = { serverTimestamps: "estimate" };
   unsubs.push(fs.onSnapshot(fs.collection(db, "items"), (snap) => {
     items = snap.docs.map((d) => { const x = d.data(opts); return { id: d.id, ...x, updatedAt: millis(x.updatedAt) }; });
-    renderCats(); renderItems();
+    scheduleItemsRender();
   }, lostAccess));
   subscribeLogs();
   subscribeToday();
