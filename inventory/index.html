@@ -67,15 +67,15 @@
     <div class="banner" id="banner" hidden></div>
 
     <section class="stats" aria-label="재고 요약">
-      <div class="stat"><span class="k"><span id="sBook">부속</span> 품목 수</span><span class="v" id="sItems">–</span></div>
+      <div class="stat"><span class="k"><span id="sBook">상품</span> 품목 수</span><span class="v" id="sItems">–</span></div>
       <div class="stat warn"><span class="k">부족</span><span class="v" id="sLow">–</span></div>
       <div class="stat bad"><span class="k">재고 없음</span><span class="v" id="sOut">–</span></div>
       <div class="stat"><span class="k">오늘 입출고</span><span class="v" id="sToday">–</span></div>
     </section>
 
     <nav class="tabs" role="tablist">
-      <button role="tab" data-tab="items" data-book="parts" aria-selected="true">부속</button>
-      <button role="tab" data-tab="items" data-book="goods" aria-selected="false">상품</button>
+      <button role="tab" data-tab="items" data-book="goods" aria-selected="true">상품</button>
+      <button role="tab" data-tab="items" data-book="parts" aria-selected="false">부속</button>
       <button role="tab" data-tab="log" aria-selected="false">입출고 기록</button>
       <button role="tab" data-tab="members" aria-selected="false">팀원</button>
     </nav>
@@ -117,7 +117,7 @@
     </section>
 
     <section id="viewLog" class="view" hidden>
-      <div class="chips" id="logBooks" role="group" aria-label="기록 장부"><button type="button" class="chip" data-book="parts" aria-pressed="true">부속 기록</button><button type="button" class="chip" data-book="goods" aria-pressed="false">상품 기록</button></div>
+      <div class="chips" id="logBooks" role="group" aria-label="기록 장부"><button type="button" class="chip" data-book="goods" aria-pressed="true">상품 기록</button><button type="button" class="chip" data-book="parts" aria-pressed="false">부속 기록</button></div>
       <input class="search" type="search" id="logQ" placeholder="품목명, 사람, 메모, 입고·출고 검색" />
       <div class="panel">
         <ul class="log" id="log"></ul>
@@ -235,6 +235,6 @@
 </dialog>
 
 <div class="toast" id="toast" hidden role="status"></div>
-<script type="module" src="app.js?v=9"></script>
+<script type="module" src="app.js?v=10"></script>
 </body>
 </html>

@@ -14,7 +14,7 @@ let busy = false;
 
 // 장부: 부속(parts)과 상품(goods)은 품목·분류·기록을 따로 관리합니다. book 이 없는 예전 품목은 부속입니다.
 const BOOKS = { parts: "부속", goods: "상품" };
-let book = "parts", logBook = "parts";
+let book = "goods", logBook = "goods"; // 첫 탭(상품)이 기본
 const bookOf = (x) => (x && x.book) || "parts";
 const curItems = () => items.filter((i) => bookOf(i) === book);
 
@@ -644,7 +644,7 @@ document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("cli
 document.querySelectorAll("#logBooks .chip").forEach((c) => c.addEventListener("click", () => { logBook = c.dataset.book; renderLog(); ensureLogs(); }));
 try {
   const t = localStorage.getItem("stock.tab"), b = localStorage.getItem("stock.book");
-  showTab(t || "items", b && BOOKS[b] ? b : "parts");
+  showTab(t || "items", b && BOOKS[b] ? b : "goods");
 } catch (e) {}
 
 $("btnCsv").addEventListener("click", () => {
