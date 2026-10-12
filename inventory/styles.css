@@ -291,3 +291,13 @@ dialog::backdrop { background: rgba(10,15,20,.45); }
 .board-cols > .bkind:first-child { margin-top: 0; }
 .kindtag { color: var(--fg); font-weight: 600; }
 @media (max-width: 640px) { .bkind { font-size: 15px; } }
+
+/* 구분 관리 */
+.kindlist li { grid-template-columns: auto auto minmax(0, 1fr) auto auto auto; }
+.kindlist .mv { width: 30px; height: 30px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--muted); font-size: 12px; }
+.kindlist .mv:disabled { opacity: .3; cursor: default; }
+.kindlist .unlisted { font-size: 11px; color: var(--warn); }
+.kindlist .kconfirm { grid-column: 1 / -1; background: var(--bad-bg); color: var(--bad); padding: 8px 10px; border-radius: 6px; font-size: 13px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.kindadd { display: flex; gap: 8px; }
+.kindadd input { flex: 1; min-width: 0; }
+@media (max-width: 640px) { .kindlist li { grid-template-columns: auto auto minmax(0, 1fr) auto auto; } .kindlist .cnt { display: none; } }

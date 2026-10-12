@@ -51,6 +51,17 @@ service cloud.firestore {
       allow delete: if isAdmin() && mEmail != email();
     }
 
+    // ---------- 설정: 구분 목록 (모든 팀원이 함께 관리) ----------
+    match /settings/kinds {
+      allow read: if isMember();
+      allow write: if isMember()
+        && request.resource.data.keys().hasOnly(['list', 'updatedBy', 'updatedAt'])
+        && request.resource.data.list is list
+        && request.resource.data.list.size() <= 40
+        && request.resource.data.updatedBy == email()
+        && request.resource.data.updatedAt == request.time;
+    }
+
     // ---------- 품목 ----------
     function validItem() {
       let d = request.resource.data;

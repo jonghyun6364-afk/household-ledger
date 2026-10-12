@@ -17,13 +17,15 @@ const BOOKS = { parts: "부속", goods: "상품" };
 let book = "goods", logBook = "goods", boardBook = "goods"; // 첫 탭(상품)이 기본
 const bookOf = (x) => (x && x.book) || "parts";
 const curItems = () => items.filter((i) => bookOf(i) === book);
-// 구분(기구 종류): 화이트보드처럼 런닝머신 → 자전거 → 홈짐 순서, 그 밖의 구분은 가나다순, 구분 없음은 맨 뒤
-const KIND_ORDER = ["런닝머신", "자전거", "홈짐"];
+// 구분(기구 종류): 목록과 순서는 서버의 settings/kinds 문서에 두고 모든 팀원이 함께 관리합니다.
+// 목록에 없는 구분은 그 뒤에 가나다순, 구분 없음은 맨 뒤.
+const DEFAULT_KINDS = ["런닝머신", "자전거", "홈짐"];
+let kindsList = DEFAULT_KINDS.slice(), kindsLoaded = false;
 const kindOf = (i) => (i.kind || "").trim();
-const kindRank = (k) => (KIND_ORDER.includes(k) ? KIND_ORDER.indexOf(k) : k ? 10 : 99);
+const kindRank = (k) => (kindsList.includes(k) ? kindsList.indexOf(k) : k ? 1000 : 9999);
 const byKind = (a, b) => kindRank(a) - kindRank(b) || a.localeCompare(b, "ko");
 function renderKindList() {
-  const kinds = [...new Set([...KIND_ORDER, ...items.map(kindOf).filter(Boolean)])].sort(byKind);
+  const kinds = [...new Set([...kindsList, ...items.map(kindOf).filter(Boolean)])].sort(byKind);
   $("kindList").replaceChildren(...kinds.map((k) => el("option", { value: k })));
 }
 
@@ -509,6 +511,96 @@ $("selAll").addEventListener("change", (e) => {
   shownList.forEach((i) => (e.target.checked ? selected.add(i.id) : selected.delete(i.id)));
   renderItems();
 });
+// ---------- 구분 관리 ----------
+let kindConfirm = null; // 삭제 확인 중인 구분
+async function saveKinds(list) {
+  await fs.setDoc(fs.doc(db, "settings", "kinds"), { list, updatedBy: me.email, updatedAt: fs.serverTimestamp() });
+}
+// 품목들의 구분을 한꺼번에 바꿉니다(이름 변경·삭제에 사용). 품목마다 정보 수정 기록이 남습니다.
+async function setKindFor(list, kind, progress) {
+  let done = 0;
+  for (const it of list) {
+    if (progress) progress(done, list.length);
+    await editItem(it.id, { name: it.name, category: it.category || "", kind, location: it.location || "", unit: it.unit || "", minQty: toInt(it.minQty), note: it.note || "" });
+    done++;
+  }
+  return done;
+}
+function renderKindRows() {
+  const counts = new Map();
+  items.forEach((i) => { const k = kindOf(i); if (k) counts.set(k, (counts.get(k) || 0) + 1); });
+  const unlisted = [...counts.keys()].filter((k) => !kindsList.includes(k)).sort((a, b) => a.localeCompare(b, "ko"));
+  const rows = [...kindsList.map((k) => ({ k, listed: true })), ...unlisted.map((k) => ({ k, listed: false }))];
+  $("kindRows").replaceChildren(...rows.map(({ k, listed }, idx) => {
+    const n = counts.get(k) || 0;
+    const input = el("input", { type: "text", id: "kind-" + idx, maxlength: "20", value: k, "aria-label": `${k} 새 이름` });
+    const save = el("button", { type: "button", class: "btn", disabled: true }, "변경");
+    input.addEventListener("input", () => { save.disabled = !input.value.trim() || input.value.trim() === k; });
+    save.addEventListener("click", () => renameKind(k, input.value.trim()));
+    const li = el("li", {},
+      el("button", { type: "button", class: "mv", title: "위로", "aria-label": `${k} 위로`, disabled: !listed || idx === 0, onclick: () => reorderKind(k, -1) }, "▲"),
+      el("button", { type: "button", class: "mv", title: "아래로", "aria-label": `${k} 아래로`, disabled: !listed || idx === kindsList.length - 1, onclick: () => reorderKind(k, 1) }, "▼"),
+      el("div", {}, input, listed ? null : el("div", { class: "unlisted" }, "목록에 없는 구분 (품목에만 있음)")),
+      el("span", { class: "cnt" }, `${fmtN(n)}개 품목`),
+      listed ? save : el("button", { type: "button", class: "btn", onclick: () => addKind(k) }, "목록에 추가"),
+      el("button", { type: "button", class: "btn danger", onclick: () => { kindConfirm = k; renderKindRows(); } }, "삭제"));
+    if (kindConfirm === k) li.append(el("div", { class: "kconfirm" },
+      el("span", {}, n ? `"${k}" 구분을 지울까요? ${fmtN(n)}개 품목은 "구분 없음"이 됩니다.` : `"${k}" 구분을 지울까요?`),
+      el("span", { class: "confirm-btns" },
+        el("button", { type: "button", class: "btn", onclick: () => { kindConfirm = null; renderKindRows(); } }, "취소"),
+        el("button", { type: "button", class: "btn danger solid", onclick: () => removeKind(k) }, "삭제"))));
+    return li;
+  }));
+  if (!rows.length) $("kindRows").replaceChildren(el("li", { class: "meta" }, "구분이 없습니다. 아래에서 추가하세요."));
+}
+async function kindTask(fn) {
+  if (busy) return;
+  busy = true;
+  $("ksErr").textContent = "";
+  $("dKinds").querySelectorAll("input, button").forEach((x) => (x.disabled = true));
+  try { await fn(); }
+  catch (e) { $("ksErr").textContent = errMsg(e); }
+  finally {
+    busy = false;
+    $("dKinds").querySelectorAll("input, button").forEach((x) => (x.disabled = false));
+    renderKindRows();
+  }
+}
+const addKind = (name) => kindTask(async () => {
+  if (!name) return;
+  if (kindsList.includes(name)) { $("ksErr").textContent = "이미 있는 구분입니다."; return; }
+  if (kindsList.length >= 40) { $("ksErr").textContent = "구분은 40개까지 만들 수 있습니다."; return; }
+  await saveKinds([...kindsList, name]);
+  $("kNew").value = "";
+  toast(`"${name}" 구분을 추가했습니다`);
+});
+const reorderKind = (name, dir) => kindTask(async () => {
+  const list = kindsList.slice(), i = list.indexOf(name), j = i + dir;
+  if (i < 0 || j < 0 || j >= list.length) return;
+  [list[i], list[j]] = [list[j], list[i]];
+  await saveKinds(list);
+});
+const renameKind = (from, to) => kindTask(async () => {
+  if (!to || to === from) return;
+  const merge = kindsList.includes(to);
+  const list = kindsList.includes(from) ? kindsList.map((k) => (k === from ? to : k)) : [...kindsList, to];
+  await saveKinds([...new Set(list)]);
+  const targets = items.filter((i) => kindOf(i) === from);
+  const done = await setKindFor(targets, to, (d, n) => { $("ksErr").textContent = `품목 바꾸는 중 ${d + 1}/${n}`; });
+  $("ksErr").textContent = "";
+  toast(`"${from}" → "${to}"${merge ? " (합침)" : ""}, 품목 ${done}개 변경`);
+});
+const removeKind = (name) => kindTask(async () => {
+  kindConfirm = null;
+  const targets = items.filter((i) => kindOf(i) === name);
+  const done = await setKindFor(targets, "", (d, n) => { $("ksErr").textContent = `품목 바꾸는 중 ${d + 1}/${n}`; });
+  if (kindsList.includes(name)) await saveKinds(kindsList.filter((k) => k !== name));
+  $("ksErr").textContent = "";
+  toast(`"${name}" 구분을 지웠습니다${done ? `, 품목 ${done}개는 구분 없음` : ""}`);
+});
+$("btnKinds").addEventListener("click", () => { kindConfirm = null; $("ksErr").textContent = ""; $("kNew").value = ""; renderKindRows(); $("dKinds").showModal(); });
+$("fKinds").addEventListener("submit", (ev) => { ev.preventDefault(); addKind($("kNew").value.trim()); });
+
 // 선택한 품목들의 구분을 한 번에 지정합니다. 품목마다 정보 수정 기록이 남습니다.
 $("selKind").addEventListener("click", () => {
   const list = items.filter((i) => selected.has(i.id));
@@ -812,6 +904,14 @@ function startData() {
   }, lostAccess));
   subscribeLogs();
   subscribeToday();
+  unsubs.push(fs.onSnapshot(fs.doc(db, "settings", "kinds"), (snap) => {
+    const list = snap.exists() && Array.isArray(snap.data().list) ? snap.data().list.filter((k) => typeof k === "string" && k.trim()) : null;
+    kindsList = list || DEFAULT_KINDS.slice();
+    kindsLoaded = true;
+    renderKindList();
+    if ($("dKinds").open) renderKindRows();
+    scheduleItemsRender();
+  }, () => {}));
   unsubs.push(fs.onSnapshot(fs.collection(db, "members"), (snap) => {
     members = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     const mine = members.find((m) => m.id === me.email);
