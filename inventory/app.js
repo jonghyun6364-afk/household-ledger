@@ -678,7 +678,9 @@ function renderBoard() {
   $("boardSum").textContent = `재고 있는 품목 ${fmtN(inStock.length)}종 · 총 ${fmtN(total)}개` + (all.length > inStock.length ? ` · 없는 품목 ${fmtN(all.length - inStock.length)}종` : "");
   const groups = new Map();
   list.forEach((i) => { const c = (i.category || "").trim() || "분류 없음"; if (!groups.has(c)) groups.set(c, []); groups.get(c).push(i); });
-  const cats = [...groups.keys()].sort((a, b) => (a === "분류 없음") - (b === "분류 없음") || a.localeCompare(b, "ko"));
+  // 신품·중고 같은 분류는 가나다순, 수리대기와 분류 없음은 맨 뒤
+  const lastRank = (c) => ({ "수리대기": 1, "분류 없음": 2 })[c] || 0;
+  const cats = [...groups.keys()].sort((a, b) => lastRank(a) - lastRank(b) || a.localeCompare(b, "ko"));
   $("boardCols").replaceChildren(...(cats.length ? cats.map((c) => el("section", { class: "bgroup" },
     el("h3", {}, c),
     el("ul", {}, groups.get(c).map((it) => el("li", {},
