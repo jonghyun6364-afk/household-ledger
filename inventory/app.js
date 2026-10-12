@@ -17,6 +17,15 @@ const BOOKS = { parts: "부속", goods: "상품" };
 let book = "goods", logBook = "goods", boardBook = "goods"; // 첫 탭(상품)이 기본
 const bookOf = (x) => (x && x.book) || "parts";
 const curItems = () => items.filter((i) => bookOf(i) === book);
+// 구분(기구 종류): 화이트보드처럼 런닝머신 → 자전거 → 홈짐 순서, 그 밖의 구분은 가나다순, 구분 없음은 맨 뒤
+const KIND_ORDER = ["런닝머신", "자전거", "홈짐"];
+const kindOf = (i) => (i.kind || "").trim();
+const kindRank = (k) => (KIND_ORDER.includes(k) ? KIND_ORDER.indexOf(k) : k ? 10 : 99);
+const byKind = (a, b) => kindRank(a) - kindRank(b) || a.localeCompare(b, "ko");
+function renderKindList() {
+  const kinds = [...new Set([...KIND_ORDER, ...items.map(kindOf).filter(Boolean)])].sort(byKind);
+  $("kindList").replaceChildren(...kinds.map((k) => el("option", { value: k })));
+}
 
 // 기록은 부속·상품 각각 최근 30건만 보여 주고, 버튼으로 30건씩 더 봅니다(읽기 사용량을 아끼려고).
 // 두 장부의 기록이 한 컬렉션에 섞여 있어서, 보고 있는 장부가 30건을 채울 때까지 서버에서 조금씩 더 읽어 옵니다.
@@ -115,7 +124,7 @@ function renderItems() {
   const list = all
     .filter((i) => !catFilter || (i.category || "") === catFilter)
     .filter((i) => !lowOnly || status(i) !== "ok")
-    .filter((i) => !q || [i.name, i.category, i.location, i.note].some((s) => (s || "").toLowerCase().includes(q)))
+    .filter((i) => !q || [i.name, i.category, i.kind, i.location, i.note].some((s) => (s || "").toLowerCase().includes(q)))
     .sort(byName); // 이름순(숫자 순서). 없음·부족은 색과 [부족·없음만] 칩으로 찾습니다
 
   const qtyEl = (it) => el("span", { class: "qty " + status(it) }, fmtN(it.qty), el("small", {}, it.unit || ""));
@@ -136,7 +145,7 @@ function renderItems() {
   $("rows").replaceChildren(...list.map((it) => el("tr", {},
     selectMode ? el("td", { class: "selcol" }, selBox(it)) : null,
     el("td", {}, el("div", { class: "iname" }, it.name || "(이름 없음)", it.note ? el("small", {}, it.note) : null)),
-    el("td", {}, el("button", { class: "catbtn", title: "분류 바꾸기", onclick: () => openItem(it.id, "iCat") }, it.category || "분류 없음")),
+    el("td", {}, el("button", { class: "catbtn", title: "분류 바꾸기", onclick: () => openItem(it.id, "iCat") }, kindOf(it) ? el("span", { class: "kindtag" }, kindOf(it) + " · ") : null, it.category || "분류 없음")),
     el("td", { class: "r" }, qtyEl(it)),
     el("td", { class: "meta" }, who(it)),
     el("td", {}, el("div", { class: "acts" },
@@ -153,7 +162,7 @@ function renderItems() {
     el("div", { class: "minfo" },
       el("button", { class: "mname", onclick: () => openMove(it.id) }, it.name || "(이름 없음)"),
       el("div", { class: "mmeta" },
-        el("button", { class: "catbtn", title: "품목 수정", onclick: () => openItem(it.id, "iCat") }, it.category || "분류 없음"),
+        el("button", { class: "catbtn", title: "품목 수정", onclick: () => openItem(it.id, "iCat") }, kindOf(it) ? el("span", { class: "kindtag" }, kindOf(it) + " · ") : null, it.category || "분류 없음"),
         who(it) ? el("span", {}, who(it)) : null,
         el("span", { class: "mact" },
           el("button", { class: "link", onclick: () => openItem(it.id) }, "수정"),
@@ -347,6 +356,8 @@ function openItem(id, focusId) {
   $("dItemTitle").textContent = it ? `${BOOKS[bookOf(it)]} 정보 수정` : `${BOOKS[book]} 추가`;
   $("iName").value = it?.name || "";
   $("iCat").value = it?.category || catFilter;
+  $("iKind").value = it?.kind || "";
+  renderKindList();
   $("iLoc").value = it?.location || "";
   $("iUnit").value = it?.unit || "";
   $("iMin").value = it ? (it.minQty || 0) : 0;
@@ -367,6 +378,7 @@ $("fItem").addEventListener("submit", async (ev) => {
   const fields = {
     name, category: $("iCat").value.trim(), location: $("iLoc").value.trim().toUpperCase(),
     unit: $("iUnit").value.trim(), minQty: toInt($("iMin").value), note: $("iNote").value.trim(),
+    kind: $("iKind").value.trim(),
   };
   $("iSave").disabled = true;
   try {
@@ -475,7 +487,7 @@ $("fConfirm").addEventListener("submit", async (ev) => {
 function setSelectMode(on) {
   selectMode = on;
   selected.clear();
-  $("btnSelect").textContent = on ? "선택 끝내기" : "선택 삭제";
+  $("btnSelect").textContent = on ? "선택 끝내기" : "여러 개 선택";
   renderItems();
 }
 let shownList = [];
@@ -487,6 +499,7 @@ function renderSelBar(list) {
   $("selCount").textContent = `${selected.size}개 선택`;
   $("selDelete").disabled = !selected.size;
   $("selDelete").textContent = selected.size ? `${selected.size}개 삭제` : "삭제";
+  $("selKind").disabled = !selected.size;
   $("selAll").checked = list.length > 0 && visible === list.length;
 }
 $("btnSelect").addEventListener("click", () => setSelectMode(!selectMode));
@@ -495,6 +508,39 @@ $("selCancel").addEventListener("click", () => setSelectMode(false));
 $("selAll").addEventListener("change", (e) => {
   shownList.forEach((i) => (e.target.checked ? selected.add(i.id) : selected.delete(i.id)));
   renderItems();
+});
+// 선택한 품목들의 구분을 한 번에 지정합니다. 품목마다 정보 수정 기록이 남습니다.
+$("selKind").addEventListener("click", () => {
+  const list = items.filter((i) => selected.has(i.id));
+  if (!list.length) return;
+  renderKindList();
+  $("kTitle").textContent = `${list.length}개 품목 구분 지정`;
+  $("kMsg").textContent = list.slice(0, 8).map((i) => i.name).join(", ") + (list.length > 8 ? ` 외 ${list.length - 8}개` : "");
+  const kinds = [...new Set(list.map(kindOf))];
+  $("kValue").value = kinds.length === 1 ? kinds[0] : "";
+  $("kErr").textContent = "";
+  $("kOk").disabled = false; $("kOk").textContent = "지정";
+  $("dKind").showModal(); $("kValue").focus();
+});
+$("fKind").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const kind = $("kValue").value.trim();
+  const list = items.filter((i) => selected.has(i.id) && kindOf(i) !== kind);
+  $("kOk").disabled = true;
+  let done = 0;
+  try {
+    for (const it of list) {
+      $("kOk").textContent = `지정 중 ${done + 1}/${list.length}`;
+      await editItem(it.id, { name: it.name, category: it.category || "", kind, location: it.location || "", unit: it.unit || "", minQty: toInt(it.minQty), note: it.note || "" });
+      done++;
+    }
+    $("dKind").close();
+    toast(`${done}개 품목을 "${kind || "구분 없음"}"(으)로 지정했습니다`);
+    setSelectMode(false);
+  } catch (e) {
+    $("kErr").textContent = `${done}개 지정 후 멈췄습니다. ${errMsg(e)}`;
+    $("kOk").disabled = false; $("kOk").textContent = "다시 시도";
+  }
 });
 $("selDelete").addEventListener("click", () => {
   const list = items.filter((i) => selected.has(i.id));
@@ -527,7 +573,7 @@ async function renameCategory(from, to) {
   try {
     for (const it of targets) {
       await editItem(it.id, {
-        name: it.name, category: to, location: it.location || "", unit: it.unit || "",
+        name: it.name, category: to, kind: kindOf(it), location: it.location || "", unit: it.unit || "",
         minQty: toInt(it.minQty), note: it.note || "",
       });
       done++;
@@ -628,7 +674,7 @@ $("btnAdd").addEventListener("click", () => openItem(null));
 function showTab(which, bk) {
   if (which === "items" && BOOKS[bk] && bk !== book) {
     book = bk; logBook = bk; catFilter = ""; lowOnly = false; $("q").value = "";
-    selectMode = false; selected.clear(); $("btnSelect").textContent = "선택 삭제";
+    selectMode = false; selected.clear(); $("btnSelect").textContent = "여러 개 선택";
     renderCats(); renderItems(); renderLog(); ensureLogs();
   }
   $("btnAdd").textContent = `+ ${BOOKS[book]} 추가`;
@@ -650,8 +696,8 @@ try {
 
 $("btnCsv").addEventListener("click", () => {
   const esc = (v) => { const s = String(v ?? ""); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-  const head = ["품목", "분류", "위치", "수량", "단위", "최소 수량", "상태", "메모", "최근 변경자", "최근 변경 시각"];
-  const rows = curItems().map((i) => [i.name, i.category, i.location, i.qty, i.unit, i.minQty, STATUS_LABEL[status(i)], i.note,
+  const head = ["품목", "구분", "분류", "위치", "수량", "단위", "최소 수량", "상태", "메모", "최근 변경자", "최근 변경 시각"];
+  const rows = curItems().map((i) => [i.name, i.kind || "", i.category, i.location, i.qty, i.unit, i.minQty, STATUS_LABEL[status(i)], i.note,
     i.updatedBy, i.updatedAt ? new Date(i.updatedAt).toLocaleString("ko-KR") : ""]);
   const csv = "﻿" + [head, ...rows].map((r) => r.map(esc).join(",")).join("\r\n");
   const d = new Date(), stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
@@ -676,19 +722,27 @@ function renderBoard() {
   const inStock = all.filter((i) => (Number(i.qty) || 0) > 0);
   const total = inStock.reduce((s, i) => s + (Number(i.qty) || 0), 0);
   $("boardSum").textContent = `재고 있는 품목 ${fmtN(inStock.length)}종 · 총 ${fmtN(total)}개` + (all.length > inStock.length ? ` · 없는 품목 ${fmtN(all.length - inStock.length)}종` : "");
-  const groups = new Map();
-  list.forEach((i) => { const c = (i.category || "").trim() || "분류 없음"; if (!groups.has(c)) groups.set(c, []); groups.get(c).push(i); });
   // 신품·중고 같은 분류는 가나다순, 수리대기와 분류 없음은 맨 뒤
   const lastRank = (c) => ({ "수리대기": 1, "분류 없음": 2 })[c] || 0;
-  const cats = [...groups.keys()].sort((a, b) => lastRank(a) - lastRank(b) || a.localeCompare(b, "ko"));
-  $("boardCols").replaceChildren(...(cats.length ? cats.map((c) => el("section", { class: "bgroup" },
-    el("h3", {}, c),
-    el("ul", {}, groups.get(c).map((it) => el("li", {},
-      el("button", { type: "button", class: "bentry " + status(it), title: `${it.name} 입출고`, onclick: () => openMove(it.id) },
-        el("span", { class: "bn" }, it.name),
-        el("span", { class: "bdots", "aria-hidden": "true" }),
-        el("span", { class: "bq" }, (Number(it.qty) || 0) > 0 ? fmtN(it.qty) : "-")))))))
-    : [el("p", { class: "board-empty" }, showZero ? "등록된 품목이 없습니다." : "지금 재고가 있는 품목이 없습니다.")]));
+  const catGroups = (rows) => {
+    const groups = new Map();
+    rows.forEach((i) => { const c = (i.category || "").trim() || "분류 없음"; if (!groups.has(c)) groups.set(c, []); groups.get(c).push(i); });
+    return [...groups.keys()].sort((a, b) => lastRank(a) - lastRank(b) || a.localeCompare(b, "ko")).map((c) => el("section", { class: "bgroup" },
+      el("h3", {}, c),
+      el("ul", {}, groups.get(c).map((it) => el("li", {},
+        el("button", { type: "button", class: "bentry " + status(it), title: `${it.name} 입출고`, onclick: () => openMove(it.id) },
+          el("span", { class: "bn" }, it.name),
+          el("span", { class: "bdots", "aria-hidden": "true" }),
+          el("span", { class: "bq" }, (Number(it.qty) || 0) > 0 ? fmtN(it.qty) : "-")))))));
+  };
+  // 구분(런닝머신/자전거/홈짐)이 정해진 품목이 있으면 구분별 구역으로 먼저 나눕니다
+  const kinds = new Map();
+  list.forEach((i) => { const k = kindOf(i); if (!kinds.has(k)) kinds.set(k, []); kinds.get(k).push(i); });
+  const useKinds = [...kinds.keys()].some(Boolean);
+  const body = !list.length ? [el("p", { class: "board-empty" }, showZero ? "등록된 품목이 없습니다." : "지금 재고가 있는 품목이 없습니다.")]
+    : !useKinds ? catGroups(list)
+    : [...kinds.keys()].sort(byKind).flatMap((k) => [el("h2", { class: "bkind" }, k || "구분 없음"), ...catGroups(kinds.get(k))]);
+  $("boardCols").replaceChildren(...body);
 }
 document.querySelectorAll("#boardBooks .chip").forEach((c) => c.addEventListener("click", () => { boardBook = c.dataset.book; renderBoard(); }));
 $("boardZero").addEventListener("change", renderBoard);

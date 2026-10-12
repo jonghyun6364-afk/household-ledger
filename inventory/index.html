@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" crossorigin="anonymous" />
-<link rel="stylesheet" href="styles.css?v=13" />
+<link rel="stylesheet" href="styles.css?v=14" />
 </head>
 <body>
 <div class="wrap">
@@ -88,7 +88,7 @@
           <button class="btn" id="btnCats">분류 관리</button>
           <button class="btn" id="btnCsv">CSV 내보내기</button>
           <button class="btn" id="btnImport" hidden>일괄 등록</button>
-          <button class="btn" id="btnSelect" hidden>선택 삭제</button>
+          <button class="btn" id="btnSelect" hidden>여러 개 선택</button>
           <button class="btn primary" id="btnAdd">+ 품목 추가</button>
         </div>
       </div>
@@ -98,6 +98,7 @@
         <span id="selCount">0개 선택</span>
         <span class="spacer"></span>
         <button class="btn" id="selCancel">취소</button>
+        <button class="btn" id="selKind" disabled>구분 지정</button>
         <button class="btn danger solid" id="selDelete" disabled>삭제</button>
       </div>
       <div class="panel">
@@ -164,10 +165,12 @@
     <h2 id="dItemTitle">품목 추가</h2>
     <div class="field"><label for="iName">품목명</label><input type="text" id="iName" required maxlength="80" placeholder="예: A4 복사용지" /></div>
     <div class="row2">
-      <div class="field"><label for="iCat">분류</label><input type="text" id="iCat" list="catList" maxlength="40" placeholder="예: 사무용품" /></div>
+      <div class="field"><label for="iCat">분류</label><input type="text" id="iCat" list="catList" maxlength="40" placeholder="예: 신품, 중고" /></div>
       <div class="field"><label for="iLoc">보관 위치</label><input type="text" id="iLoc" maxlength="30" placeholder="예: A-03" /></div>
     </div>
     <datalist id="catList"></datalist>
+    <div class="field"><label for="iKind">구분 (기구 종류)</label><input type="text" id="iKind" list="kindList" maxlength="20" placeholder="예: 런닝머신, 자전거, 홈짐" /></div>
+    <datalist id="kindList"></datalist>
     <div class="row2">
       <div class="field" id="iQtyField"><label for="iQty" id="iQtyLabel">시작 수량</label><input type="number" id="iQty" min="0" step="1" value="0" inputmode="numeric" /></div>
       <div class="field"><label for="iUnit">단위</label><input type="text" id="iUnit" maxlength="10" placeholder="개, 박스, kg" /></div>
@@ -204,6 +207,20 @@
     <div class="dlg-foot">
       <button type="button" class="btn" data-close>취소</button>
       <button type="submit" class="btn primary" id="mSave">기록</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- 구분 지정 -->
+<dialog id="dKind">
+  <form class="dlg" id="fKind">
+    <h2 id="kTitle">구분 지정</h2>
+    <p class="meta" id="kMsg"></p>
+    <div class="field"><label for="kValue">구분</label><input type="text" id="kValue" list="kindList" maxlength="20" placeholder="예: 런닝머신, 자전거, 홈짐 (비우면 구분 없음)" /></div>
+    <p class="err" id="kErr"></p>
+    <div class="dlg-foot">
+      <button type="button" class="btn" data-close>취소</button>
+      <button type="submit" class="btn primary" id="kOk">지정</button>
     </div>
   </form>
 </dialog>
@@ -249,6 +266,6 @@
 </dialog>
 
 <div class="toast" id="toast" hidden role="status"></div>
-<script type="module" src="app.js?v=14"></script>
+<script type="module" src="app.js?v=15"></script>
 </body>
 </html>

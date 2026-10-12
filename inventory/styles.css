@@ -285,3 +285,9 @@ dialog::backdrop { background: rgba(10,15,20,.45); }
   .tabs { gap: 0; }
   .tabs button { padding: 9px 9px; font-size: 14px; }
 }
+
+/* 구분(런닝머신/자전거/홈짐) sections on the board: a full-width band, like a zone drawn on the whiteboard */
+.bkind { column-span: all; margin: 18px 0 10px; padding: 3px 10px; font-size: 18px; font-weight: 800; color: var(--ink-blue); background: rgba(31, 79, 191, .08); border-left: 4px solid var(--ink-blue); }
+.board-cols > .bkind:first-child { margin-top: 0; }
+.kindtag { color: var(--fg); font-weight: 600; }
+@media (max-width: 640px) { .bkind { font-size: 15px; } }
