@@ -14,7 +14,7 @@ let busy = false;
 
 // 장부: 부속(parts)과 상품(goods)은 품목·분류·기록을 따로 관리합니다. book 이 없는 예전 품목은 부속입니다.
 const BOOKS = { parts: "부속", goods: "상품" };
-let book = "goods", logBook = "goods"; // 첫 탭(상품)이 기본
+let book = "goods", logBook = "goods", boardBook = "goods"; // 첫 탭(상품)이 기본
 const bookOf = (x) => (x && x.book) || "parts";
 const curItems = () => items.filter((i) => bookOf(i) === book);
 
@@ -637,6 +637,8 @@ function showTab(which, bk) {
   $("viewItems").hidden = which !== "items";
   $("viewLog").hidden = which !== "log";
   $("viewMembers").hidden = which !== "members";
+  $("viewBoard").hidden = which !== "board";
+  if (which === "board") renderBoard();
   try { localStorage.setItem("stock.tab", which); localStorage.setItem("stock.book", book); } catch (e) {}
 }
 document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab, b.dataset.book)));
@@ -659,12 +661,40 @@ $("btnCsv").addEventListener("click", () => {
 });
 
 // ---------- auth & data ----------
-// 품목 변경이 연달아 들어와도(일괄 등록 등) 화면은 한 프레임에 한 번만 다시 그립니다
+// 품목 변경이 연달아 들어와도(일괄 등록 등) 화면은 잠깐 모았다가 한 번만 다시 그립니다(백그라운드 탭에서도 동작하도록 타이머 사용)
 let itemsRenderQueued = false;
+// ---------- 한눈에 보기 (화이트보드) ----------
+// 지금 재고가 있는 품목을 분류별로 묶어 화이트보드처럼 보여 줍니다. 품목을 누르면 입출고 창이 열립니다.
+function renderBoard() {
+  document.querySelectorAll("#boardBooks .chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.book === boardBook)));
+  const showZero = $("boardZero").checked;
+  const all = items.filter((i) => bookOf(i) === boardBook);
+  const list = all.filter((i) => showZero || (Number(i.qty) || 0) > 0).sort(byName);
+  const d = new Date();
+  $("boardTitle").textContent = `${BOOKS[boardBook]} 재고`;
+  $("boardDate").textContent = `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()}`;
+  const inStock = all.filter((i) => (Number(i.qty) || 0) > 0);
+  const total = inStock.reduce((s, i) => s + (Number(i.qty) || 0), 0);
+  $("boardSum").textContent = `재고 있는 품목 ${fmtN(inStock.length)}종 · 총 ${fmtN(total)}개` + (all.length > inStock.length ? ` · 없는 품목 ${fmtN(all.length - inStock.length)}종` : "");
+  const groups = new Map();
+  list.forEach((i) => { const c = (i.category || "").trim() || "분류 없음"; if (!groups.has(c)) groups.set(c, []); groups.get(c).push(i); });
+  const cats = [...groups.keys()].sort((a, b) => (a === "분류 없음") - (b === "분류 없음") || a.localeCompare(b, "ko"));
+  $("boardCols").replaceChildren(...(cats.length ? cats.map((c) => el("section", { class: "bgroup" },
+    el("h3", {}, c),
+    el("ul", {}, groups.get(c).map((it) => el("li", {},
+      el("button", { type: "button", class: "bentry " + status(it), title: `${it.name} 입출고`, onclick: () => openMove(it.id) },
+        el("span", { class: "bn" }, it.name),
+        el("span", { class: "bdots", "aria-hidden": "true" }),
+        el("span", { class: "bq" }, (Number(it.qty) || 0) > 0 ? fmtN(it.qty) : "-")))))))
+    : [el("p", { class: "board-empty" }, showZero ? "등록된 품목이 없습니다." : "지금 재고가 있는 품목이 없습니다.")]));
+}
+document.querySelectorAll("#boardBooks .chip").forEach((c) => c.addEventListener("click", () => { boardBook = c.dataset.book; renderBoard(); }));
+$("boardZero").addEventListener("change", renderBoard);
+
 function scheduleItemsRender() {
   if (itemsRenderQueued) return;
   itemsRenderQueued = true;
-  requestAnimationFrame(() => { itemsRenderQueued = false; renderCats(); renderItems(); });
+  setTimeout(() => { itemsRenderQueued = false; renderCats(); renderItems(); if (!$("viewBoard").hidden) renderBoard(); }, 30);
 }
 
 function stopData() {
