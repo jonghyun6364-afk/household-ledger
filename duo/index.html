@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+<title>둘이서 게임</title>
+<meta name="description" content="휴대폰 하나로 마주 앉아 즐기는 2인용 게임 모음" />
+<meta name="theme-color" content="#1d2433" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="둘이서" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icon-512.png" />
+<link rel="apple-touch-icon" href="icon-192.png" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<main class="home" id="home">
+  <header>
+    <h1>둘이서 게임</h1>
+    <p>휴대폰을 가운데 두고 마주 앉아서 하세요.<br />아래쪽이 <b class="c1">파랑</b>, 위쪽이 <b class="c2">빨강</b>이에요.</p>
+  </header>
+  <nav class="menu">
+    <a class="card" href="#hockey">
+      <span class="ico ico-hockey" aria-hidden="true"><i></i></span>
+      <span class="txt"><strong>에어하키</strong><small>손가락으로 말렛을 움직여 상대 골대에 퍽을 넣기 · 7점 먼저 내면 승리</small></span>
+    </a>
+    <a class="card" href="#omok">
+      <span class="ico ico-omok" aria-hidden="true"><i></i><i></i></span>
+      <span class="txt"><strong>오목</strong><small>흑백 번갈아 두며 다섯 개를 먼저 잇기 · 두 번 탭해서 두기</small></span>
+    </a>
+    <a class="card" href="#reflex">
+      <span class="ico ico-reflex" aria-hidden="true"><i></i></span>
+      <span class="txt"><strong>반응속도 대결</strong><small>화면이 초록색이 되는 순간 먼저 탭하기 · 5점 먼저 내면 승리</small></span>
+    </a>
+  </nav>
+  <a class="solo" href="../game/">혼자 할 땐 2048 →</a>
+</main>
+
+<section class="play" id="play" hidden>
+  <div class="stage" id="stage"></div>
+  <button class="close" id="btnClose" aria-label="메뉴로">✕</button>
+</section>
+<script src="app.js"></script>
+</body>
+</html>

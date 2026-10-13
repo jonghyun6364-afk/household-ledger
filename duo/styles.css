@@ -1,0 +1,166 @@
+:root{
+  --bg: #1d2433;
+  --surface: #283146;
+  --surface-2: #323c55;
+  --ink: #f1f3f8;
+  --ink-muted: #a3acc2;
+  --p1: #3d8bfd;
+  --p1-soft: rgba(61,139,253,0.22);
+  --p2: #ff5a4e;
+  --p2-soft: rgba(255,90,78,0.22);
+  --go: #2fbf71;
+  --table: #e9eef5;
+  --table-line: #c3cede;
+  --wood: #dcb36b;
+  --wood-line: #6b4f22;
+  --radius: 16px;
+  --font: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
+}
+
+*{ box-sizing: border-box; }
+html, body{ margin: 0; height: 100%; }
+body{
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+  overscroll-behavior: none;
+}
+button{ font: inherit; }
+[hidden]{ display: none !important; }
+
+/* ---------- home ---------- */
+.home{
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100%;
+  padding: max(28px, env(safe-area-inset-top)) 16px max(20px, env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; gap: 22px;
+}
+.home h1{ margin: 0 0 8px; font-size: 34px; font-weight: 800; letter-spacing: -0.02em; }
+.home header p{ margin: 0; color: var(--ink-muted); line-height: 1.55; }
+.c1{ color: var(--p1); }
+.c2{ color: var(--p2); }
+.menu{ display: flex; flex-direction: column; gap: 12px; }
+.card{
+  display: flex; align-items: center; gap: 16px;
+  padding: 16px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: inherit; text-decoration: none;
+}
+.card:active{ transform: scale(0.98); background: var(--surface-2); }
+.card .txt{ display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.card strong{ font-size: 19px; }
+.card small{ color: var(--ink-muted); font-size: 13.5px; line-height: 1.4; }
+.ico{
+  flex-shrink: 0;
+  width: 56px; height: 56px; border-radius: 14px;
+  position: relative;
+}
+.ico-hockey{ background: var(--table); }
+.ico-hockey::before, .ico-hockey::after{
+  content: ""; position: absolute; left: 50%; width: 20px; height: 20px; margin-left: -10px; border-radius: 50%;
+}
+.ico-hockey::before{ top: 5px; background: var(--p2); }
+.ico-hockey::after{ bottom: 5px; background: var(--p1); }
+.ico-hockey i{ position: absolute; left: 33px; top: 23px; width: 11px; height: 11px; border-radius: 50%; background: #1d2433; }
+.ico-omok{ background: var(--wood); }
+.ico-omok i{ position: absolute; width: 22px; height: 22px; border-radius: 50%; }
+.ico-omok i:first-child{ left: 9px; top: 9px; background: #15171c; }
+.ico-omok i:last-child{ right: 9px; bottom: 9px; background: #fbfbf8; }
+.ico-reflex{ background: var(--go); }
+.ico-reflex i{ position: absolute; inset: 14px 20px; background: #fff; clip-path: polygon(60% 0, 0 58%, 45% 58%, 35% 100%, 100% 40%, 55% 40%); }
+.solo{ margin-top: auto; text-align: center; color: var(--ink-muted); font-size: 14px; text-decoration: none; padding: 8px; }
+
+/* ---------- play ---------- */
+.play{ position: fixed; inset: 0; }
+.stage{ position: absolute; inset: 0; overflow: hidden; touch-action: none; }
+.close{
+  position: absolute; z-index: 20;
+  left: 8px; top: 50%; transform: translateY(-50%);
+  width: 36px; height: 36px; border-radius: 50%;
+  border: 0; background: rgba(20,24,34,0.55); color: #fff; font-size: 16px;
+  cursor: pointer;
+}
+.flip{ transform: rotate(180deg); }
+
+.btn{
+  border: 0; border-radius: 12px;
+  padding: 12px 18px;
+  font-weight: 700; font-size: 16px;
+  background: var(--ink); color: var(--bg);
+  cursor: pointer;
+}
+.btn.ghost{ background: var(--surface-2); color: var(--ink); }
+.btn:active{ transform: scale(0.96); }
+.btn:disabled{ opacity: 0.4; }
+
+/* result overlay, readable from both ends */
+.result{
+  position: absolute; inset: 0; z-index: 10;
+  background: rgba(20,24,34,0.82);
+  display: flex; flex-direction: column; align-items: center; justify-content: space-around;
+  animation: fade 250ms ease-out both;
+}
+.result .res{ text-align: center; }
+.result .res strong{ display: block; font-size: 44px; font-weight: 800; }
+.result .res span{ color: var(--ink-muted); font-size: 18px; }
+.result .res.win strong{ color: var(--go); }
+.result .actions{ display: flex; gap: 10px; }
+@keyframes fade{ from{ opacity: 0; } to{ opacity: 1; } }
+
+/* hockey */
+.hockey-canvas{ display: block; width: 100%; height: 100%; }
+
+/* omok */
+.omok{
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+}
+.omok .bar{
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 14px 16px 14px 56px;
+  min-height: 74px;
+  transition: background 200ms;
+}
+.omok .bar.active{ background: var(--surface); }
+.omok .who{ display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; }
+.omok .who small{ display: block; font-weight: 500; font-size: 13px; color: var(--ink-muted); }
+.omok .stone{ width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 1px 3px rgba(0,0,0,0.4); }
+.omok .stone.b{ background: #15171c; border: 2px solid #4b5163; }
+.omok .stone.w{ background: #fbfbf8; }
+.omok .bar .btn{ padding: 9px 14px; font-size: 14px; }
+.omok .board-wrap{ flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0; padding: 0 8px; }
+.omok canvas{ display: block; border-radius: 6px; box-shadow: 0 6px 24px rgba(0,0,0,0.35); }
+
+/* reflex */
+.reflex{ position: absolute; inset: 0; display: flex; flex-direction: column; }
+.pad{
+  flex: 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  text-align: center; padding: 20px;
+  transition: background 120ms;
+}
+.pad.p1{ background: var(--p1-soft); }
+.pad.p2{ background: var(--p2-soft); }
+.pad.wait{ background: #3a2f2f; }
+.pad.go{ background: var(--go); }
+.pad.won{ background: var(--go); }
+.pad.foul{ background: #7a2a26; }
+.pad .msg{ font-size: clamp(26px, 8vw, 38px); font-weight: 800; }
+.pad .sub{ font-size: 16px; color: var(--ink-muted); min-height: 1.3em; }
+.pad.go .sub, .pad.won .sub{ color: rgba(255,255,255,0.85); }
+.pad .pts{ display: flex; gap: 6px; }
+.pad .pts i{ width: 14px; height: 14px; border-radius: 50%; background: rgba(255,255,255,0.18); }
+.pad.p1 .pts i.on{ background: var(--p1); }
+.pad.p2 .pts i.on{ background: var(--p2); }
+.pad.go .pts i.on, .pad.won .pts i.on, .pad.wait .pts i.on, .pad.foul .pts i.on{ background: #fff; }
+.reflex .divider{ height: 4px; background: var(--bg); }
+
+@media (prefers-reduced-motion: reduce){
+  .result{ animation: none; }
+}
