@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+<title>2048 퍼즐</title>
+<meta name="description" content="밀어서 같은 숫자를 합치는 2048 퍼즐 게임" />
+<meta name="theme-color" content="#3b2f6b" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="2048" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icon-512.png" />
+<link rel="apple-touch-icon" href="icon-192.png" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<main class="wrap">
+  <header class="top">
+    <h1 class="title">2048</h1>
+    <div class="scores">
+      <div class="score"><span>점수</span><strong id="score">0</strong></div>
+      <div class="score"><span>최고</span><strong id="best">0</strong></div>
+    </div>
+  </header>
+
+  <div class="bar">
+    <p class="hint">밀어서 같은 숫자를 합쳐 <b>2048</b>을 만드세요</p>
+    <div class="actions">
+      <button class="btn ghost" id="btnUndo" disabled>되돌리기</button>
+      <button class="btn" id="btnNew">새 게임</button>
+    </div>
+  </div>
+
+  <div class="board" id="board">
+    <div class="cells" aria-hidden="true"></div>
+    <div class="tiles" id="tiles"></div>
+    <div class="overlay" id="overlay" hidden>
+      <strong id="overlayTitle"></strong>
+      <p id="overlayText"></p>
+      <div class="actions">
+        <button class="btn ghost" id="btnKeep" hidden>계속하기</button>
+        <button class="btn" id="btnRetry">새 게임</button>
+      </div>
+    </div>
+  </div>
+
+  <p class="foot">휴대폰: 보드를 스와이프 · 키보드: 방향키 또는 WASD</p>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
